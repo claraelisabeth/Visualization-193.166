@@ -1,13 +1,29 @@
 # Visualization-193.166
 Repository for the TU Vienna Course Visualization
 
+Important dates:  
+29.10.24 - Topic Presentation Submission  
+30.10.24 - Topic Presentation  
+5.11.24 - Project proposal submission (summary of implementation idea)  
+3.12.24 -	Intermediate submission (voluntary)  
+7.01.25 -	Final submission: presentation & program   
+8.01.25 & 15.01.25 - Presentation  
+22.01.25 - Submission Talks (date picker/schedule to be announced)
+
 ## Task Description
 The task is to implement a state-of-the-art interactive visualization technique in a group of two (you can use the group finder to find a partner!). There are three principle approaches how to address the project: 
 
 - Select an article describing a state-of-the-art visualization algorithm (e.g., from our paper list). Implement the technique in a different programming language (e.g., using WebGPU instead of d3) or in a different environment (e.g., in virtual or augmented reality) than the reference solution from the paper. The focus lies on the quality (e.g., performance, visual result, usability) of the implemented algorithm compared to the reference paper. 
 - Select a state-of-the-art visualization technique for which an open source implementation exists and adapt or extend it. Examples could be a generalization of the technique to other data types, increasing the scalability of the system, or adding new interaction techniques. The focus lies on the technical quality (e.g., performance, robustness against different data characteristics) and / or creativity of the implemented extension.  
 - Select a challenging data set (e.g., large or complex) and visualize it using a state-of-the-art visualization technique (e.g., re-implementing one of our provided papers). The focus lies on a creative (interactive) solution and a robust system. 
-It is up to you how you implement this exercise, no requirements on the programming language, libraries, or development environment are given. This could be an opportunity to try new technology! 
+It is up to you how you implement this exercise, no requirements on the programming language, libraries, or development environment are given. This could be an opportunity to try new technology!
+
+Original Paper: https://arxiv.org/pdf/2108.05467   
+2024: https://github.com/eliasfuericht/Atmospheric-Edge-Path-Bundling  
+2023: https://immersive-edge-path.emanum.dev/   
+2022: https://www.cg.tuwien.ac.at/courses/Vis2/HallOfFame/2022S/Hoefler/index.html  
+Survey by TU Graz Students: https://courses.isds.tugraz.at/ivis/surveys/ss2017/ivis-ss2017-g4-survey-edge-bundling.pdf   
+GGRAPH: https://ggraph.data-imaginist.com/reference/geom_edge_bundle_path.html   
 
 ## Further Information
 Each project must include a README.md file in the submission repository. The README should explain:
