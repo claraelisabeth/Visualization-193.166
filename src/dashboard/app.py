@@ -18,6 +18,7 @@ from ..data_loader import (
     load_migration_json,
     load_air_traffic_data
 )
+from ..visualization import create_network_visualization
 
 # UI Colors
 even_lighter_beige = 'rgb(247, 242, 233)'
@@ -168,30 +169,21 @@ def update_graph(dataset, bundling_factor, network_size):
         graph = generate_synthetic_brain_data(num_regions=network_size, connection_prob=0.1)
         title = f"Brain Connectivity Network ({network_size} regions)"
     elif dataset == 'air_traffic':
-        # For demo purposes, create a small synthetic air traffic network
-        # In production, this would load real OpenFlights data
-        import networkx as nx
-        from ..core.bundling import create_graph
-        nodes = [{'id': i, 'name': f'Airport {i}', 'x': np.random.uniform(-180, 180), 
-                  'y': np.random.uniform(-90, 90)} for i in range(30)]
-        edges = [(i, j) for i in range(30) for j in range(i+1, 30) if np.random.random() < 0.1]
-        graph = create_graph(nodes, edges, distance_type='haversine')
+        # Create realistic air traffic network with hub structure
+        graph = _create_air_traffic_demo()
         title = "Air Traffic Network (Demo)"
     else:  # migration
-        # Create synthetic migration network
-        from ..core.bundling import create_graph
-        nodes = [{'id': i, 'name': f'County {i}', 'x': np.random.uniform(-125, -66), 
-                  'y': np.random.uniform(25, 49)} for i in range(40)]
-        edges = [(i, j) for i in range(40) for j in range(i+1, 40) if np.random.random() < 0.08]
-        graph = create_graph(nodes, edges, distance_type='euclidean')
+        # Create migration network with regional hubs
+        graph = _create_migration_demo()
         title = "Migration Flows (Demo)"
     
     # Run bundling algorithm
     result = bundle_edges(graph, max_detour_ratio=bundling_factor)
     stats = result['statistics']
     
-    # Create visualization
-    fig = create_network_plot(graph, result['bundled_paths'], title)
+    # Create visualization with smooth Bézier curves
+    fig = create_network_visualization(graph, result['bundled_paths'], title, 
+                                     use_curves=True, smoothing_level=2, num_samples=100)
     
     # Create stats text
     stats_text = (f"Total edges: {stats['total_edges']} | "
@@ -202,77 +194,6 @@ def update_graph(dataset, bundling_factor, network_size):
     return fig, stats_text
 
 
-def create_network_plot(graph, bundled_paths, title):
-    """Create a plotly network visualization."""
-    fig = go.Figure()
-    
-    # Get node positions
-    pos = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
-    
-    # Draw unbundled edges (straight lines)
-    unbundled_edges = [(u, v) for u, v, data in graph.edges(data=True) if not data.get('bundled', False)]
-    
-    for edge in unbundled_edges:
-        x0, y0 = pos[edge[0]]
-        x1, y1 = pos[edge[1]]
-        fig.add_trace(go.Scatter(
-            x=[x0, x1, None], y=[y0, y1, None],
-            mode='lines',
-            line=dict(color='lightgray', width=1),
-            hoverinfo='none',
-            showlegend=False
-        ))
-    
-    # Draw bundled paths (curved)
-    for bundle in bundled_paths:
-        path_nodes = bundle['path']
-        path_coords = [pos[node] for node in path_nodes]
-        
-        x_coords = [coord[0] for coord in path_coords]
-        y_coords = [coord[1] for coord in path_coords]
-        
-        fig.add_trace(go.Scatter(
-            x=x_coords, y=y_coords,
-            mode='lines',
-            line=dict(color='red', width=2),
-            hoverinfo='text',
-            hovertext=f"Bundled path: {' → '.join(map(str, path_nodes))}",
-            showlegend=False
-        ))
-    
-    # Draw nodes
-    node_x = [pos[node][0] for node in graph.nodes()]
-    node_y = [pos[node][1] for node in graph.nodes()]
-    node_text = [f"{node}: {data.get('name', '')}" for node, data in graph.nodes(data=True)]
-    
-    fig.add_trace(go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers',
-        marker=dict(size=6, color=green, line=dict(width=1, color='white')),
-        text=node_text,
-        hoverinfo='text',
-        showlegend=False
-    ))
-    
-    # Update layout
-    fig.update_layout(
-        title=title,
-        showlegend=False,
-        hovermode='closest',
-        margin=dict(b=20, l=5, r=5, t=40),
-        annotations=[
-            dict(text="Red lines: bundled paths, Gray lines: direct edges",
-                 showarrow=False, xref="paper", yref="paper",
-                 x=0.005, y=-0.002, xanchor='left', yanchor='bottom',
-                 font=dict(size=12, color='gray'))
-        ],
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)'
-    )
-    
-    return fig
 
 
 if __name__ == '__main__':
