@@ -7,50 +7,13 @@ with support for smooth Bézier curves following the paper's approach.
 
 import plotly.graph_objects as go
 import numpy as np
-import random
 from typing import Dict, List, Tuple, Optional
 from .curves import create_smooth_bundled_path
 
 
-# Performance constants
-MAX_UNBUNDLED_EDGES_MAP = 500
-MAX_UNBUNDLED_EDGES_3D = 1000
-DEFAULT_CURVE_SAMPLES = 100
-DEFAULT_SMOOTHING_LEVEL = 2
-
-# Geographic bounds
-LON_RANGE = (-180, 180)
-LAT_RANGE = (-90, 90)
-US_LON_RANGE = (-180, -60)
-US_LAT_RANGE = (15, 75)
-CONTINENTAL_US_LON_RANGE = (-130, -65)
-CONTINENTAL_US_LAT_RANGE = (20, 50)
-
-# Color scheme
-COLORS = {
-    'unbundled': 'lightgray',
-    'unbundled_map': 'rgba(150, 150, 150, 0.4)',
-    'bundled_highlight': 'red',
-    'bundled_normal': 'lightgray',
-    'bundled_map_highlight': 'rgba(255, 50, 50, 0.8)',
-    'bundled_map_normal': 'rgba(150, 150, 150, 0.6)',
-    'node': 'rgb(78, 110, 77)'
-}
-
-# Line width configurations
-LINE_WIDTHS = {
-    'unbundled': {'2d': 1, '3d': 2, 'map': 1},
-    'bundled_thick': {'2d': 2.5, '3d': 4, 'map': 3},
-    'bundled_normal': {'2d': 1, '3d': 2, 'map': 1},  # Same as unbundled
-    'bundled_thin': {'2d': 0.8, '3d': 1.5, 'map': 0.8}
-}
-
-
 def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
                                 use_curves: bool = True, smoothing_level: int = 2,
-                                num_samples: int = 100, dataset_type: Optional[str] = None,
-                                edge_color_mode: str = 'highlight', 
-                                bundled_edge_thickness: str = 'thick') -> go.Figure:
+                                num_samples: int = 100) -> go.Figure:
     """
     Create a Plotly network visualization with smooth bundled paths.
     
@@ -61,219 +24,40 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         use_curves: Whether to use smooth curves (True) or line segments (False)
         smoothing_level: Bézier smoothing level (paper default: 2)
         num_samples: Curve sampling points (paper default: 100)
-        dataset_type: Type of dataset ('brain_3d', 'air_traffic', 'migration', or None for auto-detect)
-        edge_color_mode: Color mode for bundled edges ('highlight' for red, 'normal' for gray)
-        bundled_edge_thickness: Edge thickness mode ('thick', 'normal', 'thin')
         
     Returns:
         Plotly Figure object
     """
-    # Use explicit dataset type if provided (much faster than auto-detection)
-    if dataset_type == 'brain_3d':
-        # Create 3D visualization for brain data
-        return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples, edge_color_mode, bundled_edge_thickness)
-    
-    elif dataset_type in ['air_traffic', 'migration']:
-        # Create map-based visualization for geographic data
-        node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
-        try:
-            return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
-                                           use_curves, smoothing_level, num_samples, 
-                                           edge_color_mode, is_map=True, bundled_edge_thickness=bundled_edge_thickness)
-        except Exception:
-            # Fallback to scatter plot if map fails
-            return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
-                                           use_curves, smoothing_level, num_samples, 
-                                           edge_color_mode, is_map=False, bundled_edge_thickness=bundled_edge_thickness)
-    
-    # Fallback to auto-detection (for backward compatibility)
-    else:
-        # Check if this is 3D brain data (has z coordinates)
-        has_3d_coords = _is_brain_3d_data(graph)
-        
-        if has_3d_coords:
-            # Create 3D visualization for brain data
-            return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples, edge_color_mode, bundled_edge_thickness)
-        
-        # Get node positions for 2D visualization
-        node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
-        
-        # Auto-detect if we should use map (geographic coordinates)
-        use_map = _is_geographic_data(node_positions)
-        
-        if use_map:
-            # Create map-based visualization
-            try:
-                return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
-                                               use_curves, smoothing_level, num_samples, 
-                                               edge_color_mode, is_map=True, bundled_edge_thickness=bundled_edge_thickness)
-            except Exception:
-                # Create error figure for geographic data when map fails
-                fig = go.Figure()
-                fig.add_annotation(
-                    text="Map visualization failed<br>Please install plotly with mapbox support",
-                    xref="paper", yref="paper", x=0.5, y=0.5,
-                    showarrow=False, font=dict(size=16, color="red"),
-                    bgcolor="rgba(255,255,255,0.8)", bordercolor="red", borderwidth=2
-                )
-                fig.update_layout(
-                    title=f"{title} - Map Error",
-                    xaxis=dict(visible=False),
-                    yaxis=dict(visible=False),
-                    plot_bgcolor='white'
-                )
-                return fig
-        else:
-            # Create standard scatter plot visualization
-            return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
-                                           use_curves, smoothing_level, num_samples, 
-                                           edge_color_mode, is_map=False, bundled_edge_thickness=bundled_edge_thickness)
-
-
-def _is_brain_3d_data(graph) -> bool:
-    """Check if graph has 3D coordinates (brain data)."""
-    if not graph.nodes():
-        return False
-    
-    # Check first few nodes for z coordinate
-    sample_nodes = list(graph.nodes())[:5]
-    for node in sample_nodes:
-        node_data = graph.nodes[node]
-        if 'z' in node_data and node_data['z'] is not None:
-            return True
-    
-    return False
-
-
-def _validate_coordinate_range(coords: List[float], min_val: float, max_val: float) -> bool:
-    """Check if coordinates are within the specified range."""
-    return all(min_val <= coord <= max_val for coord in coords)
-
-
-def _has_geographic_spread(coords: List[float], min_spread: float = 1.0) -> bool:
-    """Check if coordinates have sufficient geographic spread."""
-    return max(coords) - min(coords) > min_spread
-
-
-def _is_geographic_data(node_positions: Dict, sample_size: int = 10) -> bool:
-    """Check if node positions are likely geographic coordinates (lat/lon)."""
-    if not node_positions:
-        return False
-    
-    # Sample positions to check ranges
-    positions = list(node_positions.values())[:sample_size]
-    x_coords = [pos[0] for pos in positions]
-    y_coords = [pos[1] for pos in positions]
-    
-    # Check coordinate ranges and spread
-    lon_valid = _validate_coordinate_range(x_coords, *LON_RANGE)
-    lat_valid = _validate_coordinate_range(y_coords, *LAT_RANGE)
-    has_spread = (_has_geographic_spread(x_coords) and 
-                  _has_geographic_spread(y_coords))
-    
-    return lon_valid and lat_valid and has_spread
-
-
-def _is_us_data(node_positions: Dict, sample_size: int = 20) -> bool:
-    """Check if node positions are likely US coordinates."""
-    if not node_positions:
-        return False
-    
-    positions = list(node_positions.values())[:sample_size]
-    x_coords = [pos[0] for pos in positions]  # longitude
-    y_coords = [pos[1] for pos in positions]  # latitude
-    
-    # Check US bounds
-    us_lon_valid = _validate_coordinate_range(x_coords, *US_LON_RANGE)
-    us_lat_valid = _validate_coordinate_range(y_coords, *US_LAT_RANGE)
-    
-    # Check continental US concentration
-    continental_count = sum(
-        1 for x, y in zip(x_coords, y_coords) 
-        if (CONTINENTAL_US_LON_RANGE[0] <= x <= CONTINENTAL_US_LON_RANGE[1] and 
-            CONTINENTAL_US_LAT_RANGE[0] <= y <= CONTINENTAL_US_LAT_RANGE[1])
-    )
-    
-    return (us_lon_valid and us_lat_valid and 
-            continental_count >= len(positions) * 0.7)
-
-
-def _get_visualization_colors(edge_color_mode: str, is_map: bool = False) -> Dict[str, str]:
-    """Get color scheme for visualization based on mode and type."""
-    base_colors = COLORS.copy()
-    
-    if is_map:
-        bundled_key = 'bundled_map_highlight' if edge_color_mode == 'highlight' else 'bundled_map_normal'
-        return {
-            'unbundled': base_colors['unbundled_map'],
-            'bundled': base_colors[bundled_key],
-            'node': f"{base_colors['node'][:-1]}, 0.9)"  # Add opacity
-        }
-    else:
-        bundled_key = 'bundled_highlight' if edge_color_mode == 'highlight' else 'bundled_normal'
-        return {
-            'unbundled': base_colors['unbundled'],
-            'bundled': base_colors[bundled_key],
-            'node': base_colors['node']
-        }
-
-
-def _get_line_widths(bundled_edge_thickness: str, viz_type: str) -> Dict[str, float]:
-    """Get line widths based on thickness setting and visualization type.
-    
-    Args:
-        bundled_edge_thickness: 'thick', 'normal', or 'thin'
-        viz_type: '2d', '3d', or 'map'
-        
-    Returns:
-        Dictionary with 'unbundled' and 'bundled' line widths
-    """
-    bundled_key = f'bundled_{bundled_edge_thickness}'
-    return {
-        'unbundled': LINE_WIDTHS['unbundled'][viz_type],
-        'bundled': LINE_WIDTHS[bundled_key][viz_type]
-    }
-
-
-def _create_2d_visualization(graph, bundled_paths: List[Dict], node_positions: Dict, title: str,
-                            use_curves: bool, smoothing_level: int, num_samples: int, 
-                            edge_color_mode: str = 'highlight', is_map: bool = False, 
-                            bundled_edge_thickness: str = 'thick') -> go.Figure:
-    """Create 2D visualization (map or scatter plot) for geographic or standard data."""
     fig = go.Figure()
-    colors = _get_visualization_colors(edge_color_mode, is_map)
-    viz_type = 'map' if is_map else '2d'
-    line_widths = _get_line_widths(bundled_edge_thickness, viz_type)
     
-    # Choose appropriate drawing functions based on visualization type
-    if is_map:
-        edge_func = _add_unbundled_edges_map
-        curve_func = _add_bundled_curves_map
-        segment_func = _add_bundled_segments_map
-        node_func = _add_nodes_map
-        layout_func = _configure_map_layout
-    else:
-        edge_func = _add_unbundled_edges
-        curve_func = _add_bundled_curves
-        segment_func = _add_bundled_segments
-        node_func = _add_nodes
-        layout_func = _configure_layout
+    # Get node positions
+    node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
     
-    # Draw visualization elements
-    edge_func(fig, graph, node_positions, colors['unbundled'], line_widths['unbundled'])
+    # Define colors
+    unbundled_color = 'lightgray'
+    bundled_color = 'red'
+    node_color = 'rgb(78, 110, 77)'  # Green from dashboard theme
     
+    # Draw unbundled edges (straight lines)
+    _add_unbundled_edges(fig, graph, node_positions, unbundled_color)
+    
+    # Draw bundled paths (smooth curves or line segments)
     if use_curves:
-        curve_func(fig, bundled_paths, node_positions, colors['bundled'], smoothing_level, num_samples, line_widths['bundled'])
+        _add_bundled_curves(fig, bundled_paths, node_positions, bundled_color, 
+                           smoothing_level, num_samples)
     else:
-        segment_func(fig, bundled_paths, node_positions, colors['bundled'], line_widths['bundled'])
+        _add_bundled_segments(fig, bundled_paths, node_positions, bundled_color)
     
-    node_func(fig, graph, node_positions, colors['node'])
-    layout_func(fig, title, use_curves, node_positions)
+    # Draw nodes
+    _add_nodes(fig, graph, node_positions, node_color)
+    
+    # Configure layout
+    _configure_layout(fig, title, use_curves)
     
     return fig
 
 
-def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str, width: float):
+def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str):
     """Add unbundled edges as straight lines."""
     unbundled_edges = [(u, v) for u, v, data in graph.edges(data=True) 
                       if not data.get('bundled', False)]
@@ -287,7 +71,7 @@ def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str
                 x=[x0, x1, None], 
                 y=[y0, y1, None],
                 mode='lines',
-                line=dict(color=color, width=width),
+                line=dict(color=color, width=1),
                 hoverinfo='none',
                 showlegend=False,
                 name='unbundled'
@@ -296,7 +80,7 @@ def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str
 
 def _add_bundled_curves(fig: go.Figure, bundled_paths: List[Dict], 
                        node_positions: Dict, color: str,
-                       smoothing_level: int, num_samples: int, width: float):
+                       smoothing_level: int, num_samples: int):
     """Add bundled paths as smooth Bézier curves."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
@@ -319,7 +103,7 @@ def _add_bundled_curves(fig: go.Figure, bundled_paths: List[Dict],
                 x=x_coords, 
                 y=y_coords,
                 mode='lines',
-                line=dict(color=color, width=width),
+                line=dict(color=color, width=2.5),
                 hoverinfo='text',
                 hovertext=hover_text,
                 showlegend=False,
@@ -328,7 +112,7 @@ def _add_bundled_curves(fig: go.Figure, bundled_paths: List[Dict],
 
 
 def _add_bundled_segments(fig: go.Figure, bundled_paths: List[Dict], 
-                         node_positions: Dict, color: str, width: float):
+                         node_positions: Dict, color: str):
     """Add bundled paths as straight line segments (for comparison)."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
@@ -352,7 +136,7 @@ def _add_bundled_segments(fig: go.Figure, bundled_paths: List[Dict],
                 x=x_coords, 
                 y=y_coords,
                 mode='lines',
-                line=dict(color=color, width=width),
+                line=dict(color=color, width=2),
                 hoverinfo='text',
                 hovertext=hover_text,
                 showlegend=False,
@@ -379,226 +163,16 @@ def _add_nodes(fig: go.Figure, graph, node_positions: Dict, color: str):
     ))
 
 
-def _configure_layout(fig: go.Figure, title: str, use_curves: bool, node_positions: Dict = None):
+def _configure_layout(fig: go.Figure, title: str, use_curves: bool):
     """Configure the plot layout."""
     curve_type = "Smooth Bézier curves" if use_curves else "Line segments"
     annotation_text = f"Red: bundled paths ({curve_type}), Gray: direct edges"
-    
-    # Check if this might be geographic data
-    is_geographic = _is_geographic_data(node_positions) if node_positions else False
-    
-    if is_geographic:
-        # Geographic scatter plot with visible axes and light grid
-        fig.update_layout(
-            title=title,
-            showlegend=False,
-            hovermode='closest',
-            margin=dict(b=60, l=60, r=20, t=40),
-            annotations=[
-                dict(
-                    text=annotation_text,
-                    showarrow=False, 
-                    xref="paper", yref="paper",
-                    x=0.005, y=-0.002, 
-                    xanchor='left', yanchor='bottom',
-                    font=dict(size=12, color='gray')
-                )
-            ],
-            xaxis=dict(
-                title="Longitude", 
-                showgrid=True, 
-                gridcolor='lightgray',
-                gridwidth=0.5,
-                showticklabels=True,
-                tickfont=dict(size=10)
-            ),
-            yaxis=dict(
-                title="Latitude", 
-                showgrid=True, 
-                gridcolor='lightgray',
-                gridwidth=0.5,
-                showticklabels=True,
-                tickfont=dict(size=10)
-            ),
-            plot_bgcolor='white',
-            paper_bgcolor='white'
-        )
-    else:
-        # Standard network plot with minimal styling
-        fig.update_layout(
-            title=title,
-            showlegend=False,
-            hovermode='closest',
-            margin=dict(b=20, l=5, r=5, t=40),
-            annotations=[
-                dict(
-                    text=annotation_text,
-                    showarrow=False, 
-                    xref="paper", yref="paper",
-                    x=0.005, y=-0.002, 
-                    xanchor='left', yanchor='bottom',
-                    font=dict(size=12, color='gray')
-                )
-            ],
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
-        )
-
-
-
-# Map-specific visualization functions
-def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color: str, width: float):
-    """Add unbundled edges for map visualization."""
-    unbundled_edges = [(u, v) for u, v, data in graph.edges(data=True) 
-                      if not data.get('bundled', False)]
-    
-    # Limit edges for performance
-    if len(unbundled_edges) > MAX_UNBUNDLED_EDGES_MAP:
-        unbundled_edges = random.sample(unbundled_edges, MAX_UNBUNDLED_EDGES_MAP)
-    
-    for u, v in unbundled_edges:
-        if u in node_positions and v in node_positions:
-            lon0, lat0 = node_positions[u]
-            lon1, lat1 = node_positions[v]
-            
-            fig.add_trace(go.Scattergeo(
-                lon=[lon0, lon1], 
-                lat=[lat0, lat1],
-                mode='lines',
-                line=dict(color=color, width=width),
-                hoverinfo='none',
-                showlegend=False,
-                name='unbundled'
-            ))
-
-
-def _add_bundled_curves_map(fig: go.Figure, bundled_paths: List[Dict], 
-                           node_positions: Dict, color: str,
-                           smoothing_level: int, num_samples: int, width: float):
-    """Add bundled paths as smooth curves for map visualization."""
-    for i, bundle in enumerate(bundled_paths):
-        path_nodes = bundle['path']
-        
-        # Generate smooth curve
-        curve_points = create_smooth_bundled_path(
-            path_nodes, node_positions, smoothing_level, num_samples
-        )
-        
-        if curve_points:
-            lon_coords = [point[0] for point in curve_points]
-            lat_coords = [point[1] for point in curve_points]
-            
-            # Create hover text
-            path_text = ' → '.join(map(str, path_nodes))
-            detour_ratio = bundle.get('detour_ratio', 0)
-            hover_text = f"Bundled path: {path_text}<br>Detour ratio: {detour_ratio:.2f}"
-            
-            fig.add_trace(go.Scattergeo(
-                lon=lon_coords, 
-                lat=lat_coords,
-                mode='lines',
-                line=dict(color=color, width=width),
-                hoverinfo='text',
-                hovertext=hover_text,
-                showlegend=False,
-                name=f'bundle_{i}'
-            ))
-
-
-def _add_bundled_segments_map(fig: go.Figure, bundled_paths: List[Dict], 
-                             node_positions: Dict, color: str, width: float):
-    """Add bundled paths as straight segments for map visualization."""
-    for i, bundle in enumerate(bundled_paths):
-        path_nodes = bundle['path']
-        
-        # Get coordinates for path nodes
-        path_coords = []
-        for node in path_nodes:
-            if node in node_positions:
-                path_coords.append(node_positions[node])
-        
-        if len(path_coords) >= 2:
-            lon_coords = [coord[0] for coord in path_coords]
-            lat_coords = [coord[1] for coord in path_coords]
-            
-            # Create hover text
-            path_text = ' → '.join(map(str, path_nodes))
-            detour_ratio = bundle.get('detour_ratio', 0)
-            hover_text = f"Bundled path: {path_text}<br>Detour ratio: {detour_ratio:.2f}"
-            
-            fig.add_trace(go.Scattergeo(
-                lon=lon_coords, 
-                lat=lat_coords,
-                mode='lines',
-                line=dict(color=color, width=width),
-                hoverinfo='text',
-                hovertext=hover_text,
-                showlegend=False,
-                name=f'bundle_{i}'
-            ))
-
-
-def _add_nodes_map(fig: go.Figure, graph, node_positions: Dict, color: str):
-    """Add nodes for map visualization."""
-    node_lon = [node_positions[node][0] for node in graph.nodes() if node in node_positions]
-    node_lat = [node_positions[node][1] for node in graph.nodes() if node in node_positions]
-    node_text = [f"{node}: {data.get('name', '')}" for node, data in graph.nodes(data=True) 
-                if node in node_positions]
-    
-    fig.add_trace(go.Scattergeo(
-        lon=node_lon, 
-        lat=node_lat,
-        mode='markers',
-        marker=dict(size=8, color=color, opacity=0.9),
-        text=node_text,
-        hoverinfo='text',
-        showlegend=False,
-        name='airports'
-    ))
-
-
-def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool, node_positions: Dict = None):
-    """Configure the map layout with automatic US detection."""
-    curve_type = "Smooth Bézier curves" if use_curves else "Line segments"
-    annotation_text = f"Red: bundled paths ({curve_type}), Gray: direct routes"
-    
-    # Detect if this is US data and configure accordingly
-    if node_positions and _is_us_data(node_positions):
-        # US-focused configuration with simpler settings for better compatibility
-        geo_config = dict(
-            projection=dict(type="albers usa"),  # Use built-in US projection
-            showland=True,
-            landcolor="rgb(243, 243, 243)",
-            showocean=True,
-            oceancolor="rgb(204, 229, 255)", 
-            showlakes=True,
-            lakecolor="rgb(204, 229, 255)",
-            showsubunits=True,  # Show state boundaries
-            subunitcolor="rgb(150, 150, 150)",
-            scope="usa"
-        )
-    else:
-        # World map configuration with simpler settings
-        geo_config = dict(
-            projection=dict(type="natural earth"),
-            showland=True,
-            landcolor="rgb(243, 243, 243)",
-            showocean=True,
-            oceancolor="rgb(204, 229, 255)",
-            showlakes=True,
-            lakecolor="rgb(204, 229, 255)",
-            showcountries=True,
-            countrycolor="rgb(150, 150, 150)"
-        )
     
     fig.update_layout(
         title=title,
         showlegend=False,
         hovermode='closest',
         margin=dict(b=20, l=5, r=5, t=40),
-        geo=geo_config,
         annotations=[
             dict(
                 text=annotation_text,
@@ -608,298 +182,94 @@ def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool, node_pos
                 xanchor='left', yanchor='bottom',
                 font=dict(size=12, color='gray')
             )
-        ]
+        ],
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)'
     )
 
 
-def _create_3d_visualization(graph, bundled_paths: List[Dict], title: str,
-                            use_curves: bool, smoothing_level: int, num_samples: int, 
-                            edge_color_mode: str = 'highlight', bundled_edge_thickness: str = 'thick') -> go.Figure:
-    """Create interactive 3D visualization for brain data."""
-    fig = go.Figure()
+def create_comparison_visualization(graph, bundled_paths: List[Dict], title: str) -> go.Figure:
+    """
+    Create side-by-side comparison of line segments vs smooth curves.
     
-    # Get 3D node positions
-    node_positions_3d = {node: (data['x'], data['y'], data['z']) for node, data in graph.nodes(data=True)}
+    Args:
+        graph: NetworkX graph
+        bundled_paths: List of bundled path dictionaries
+        title: Base title for the plot
+        
+    Returns:
+        Plotly Figure with subplots
+    """
+    from plotly.subplots import make_subplots
     
-    # Define colors and line widths
-    unbundled_color = 'lightgray'
-    bundled_color = 'red' if edge_color_mode == 'highlight' else 'lightgray'
-    node_color = 'rgb(78, 110, 77)'  # Green from dashboard theme
-    line_widths = _get_line_widths(bundled_edge_thickness, '3d')
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=("Line Segments", "Smooth Bézier Curves"),
+        specs=[[{"type": "scatter"}, {"type": "scatter"}]]
+    )
     
-    # Draw unbundled edges
-    _add_unbundled_edges_3d(fig, graph, node_positions_3d, unbundled_color, line_widths['unbundled'])
+    # Get node positions
+    node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
     
-    # Draw bundled paths
-    if use_curves:
-        _add_bundled_curves_3d(fig, bundled_paths, node_positions_3d, bundled_color, smoothing_level, num_samples, line_widths['bundled'])
-    else:
-        _add_bundled_segments_3d(fig, bundled_paths, node_positions_3d, bundled_color, line_widths['bundled'])
+    # Left plot: line segments
+    segments_fig = create_network_visualization(
+        graph, bundled_paths, "", use_curves=False
+    )
     
-    # Draw nodes
-    _add_nodes_3d(fig, graph, node_positions_3d, node_color)
+    # Right plot: smooth curves  
+    curves_fig = create_network_visualization(
+        graph, bundled_paths, "", use_curves=True
+    )
     
-    # Configure 3D layout
-    _configure_3d_layout(fig, title, use_curves)
+    # Add traces to subplots
+    for trace in segments_fig.data:
+        fig.add_trace(trace, row=1, col=1)
+    
+    for trace in curves_fig.data:
+        fig.add_trace(trace, row=1, col=2)
+    
+    # Update layout
+    fig.update_layout(
+        title_text=f"{title} - Visualization Comparison",
+        showlegend=False
+    )
+    
+    # Update subplot axes
+    for i in [1, 2]:
+        fig.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, row=1, col=i)
+        fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, row=1, col=i)
     
     return fig
 
 
-def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: str, width: float):
-    """Add unbundled edges as 3D lines."""
-    unbundled_edges = [(u, v) for u, v, data in graph.edges(data=True) 
-                      if not data.get('bundled', False)]
+# Test function
+def test_plotly_visualization():
+    """Test the plotly visualization with synthetic data."""
+    import networkx as nx
+    from ..core.bundling import create_graph, bundle_edges
     
-    # Limit edges for performance (brain data can be dense)
-    if len(unbundled_edges) > MAX_UNBUNDLED_EDGES_3D:
-        unbundled_edges = random.sample(unbundled_edges, MAX_UNBUNDLED_EDGES_3D)
+    # Create test graph
+    nodes = [
+        {'id': 0, 'x': 0, 'y': 0, 'name': 'A'},
+        {'id': 1, 'x': 1, 'y': 1, 'name': 'B'},
+        {'id': 2, 'x': 2, 'y': 0, 'name': 'C'},
+        {'id': 3, 'x': 1, 'y': -1, 'name': 'D'}
+    ]
     
-    for u, v in unbundled_edges:
-        if u in node_positions and v in node_positions:
-            x0, y0, z0 = node_positions[u]
-            x1, y1, z1 = node_positions[v]
-            
-            fig.add_trace(go.Scatter3d(
-                x=[x0, x1, None], 
-                y=[y0, y1, None],
-                z=[z0, z1, None],
-                mode='lines',
-                line=dict(color=color, width=width),
-                hoverinfo='none',
-                showlegend=False,
-                name='unbundled'
-            ))
+    edges = [(0, 1), (1, 2), (0, 3), (3, 2), (0, 2)]
+    
+    graph = create_graph(nodes, edges)
+    result = bundle_edges(graph, max_detour_ratio=1.8)
+    
+    # Create visualization
+    fig = create_network_visualization(graph, result['bundled_paths'], 
+                                     "Test Network with Smooth Curves")
+    
+    print(f"Created visualization with {len(result['bundled_paths'])} bundled paths")
+    return fig
 
 
-def _add_bundled_curves_3d(fig: go.Figure, bundled_paths: List[Dict], 
-                          node_positions: Dict, color: str,
-                          smoothing_level: int, num_samples: int, width: float):
-    """Add bundled paths as smooth 3D curves."""
-    for i, bundle in enumerate(bundled_paths):
-        path_nodes = bundle['path']
-        
-        # Generate smooth 3D curve
-        curve_points = _create_smooth_3d_path(path_nodes, node_positions, smoothing_level, num_samples)
-        
-        if curve_points:
-            x_coords = [point[0] for point in curve_points]
-            y_coords = [point[1] for point in curve_points]
-            z_coords = [point[2] for point in curve_points]
-            
-            # Create hover text
-            path_text = ' → '.join([str(node) for node in path_nodes])
-            detour_ratio = bundle.get('detour_ratio', 0)
-            hover_text = f"Bundled path: {path_text}<br>Detour ratio: {detour_ratio:.2f}"
-            
-            fig.add_trace(go.Scatter3d(
-                x=x_coords, 
-                y=y_coords,
-                z=z_coords,
-                mode='lines',
-                line=dict(color=color, width=width),
-                hoverinfo='text',
-                hovertext=hover_text,
-                showlegend=False,
-                name=f'bundle_{i}'
-            ))
-
-
-def _add_bundled_segments_3d(fig: go.Figure, bundled_paths: List[Dict], 
-                            node_positions: Dict, color: str, width: float):
-    """Add bundled paths as 3D line segments."""
-    for i, bundle in enumerate(bundled_paths):
-        path_nodes = bundle['path']
-        
-        # Get 3D coordinates for path nodes
-        if all(node in node_positions for node in path_nodes):
-            x_coords = [node_positions[node][0] for node in path_nodes]
-            y_coords = [node_positions[node][1] for node in path_nodes]
-            z_coords = [node_positions[node][2] for node in path_nodes]
-            
-            # Create hover text
-            path_text = ' → '.join([str(node) for node in path_nodes])
-            detour_ratio = bundle.get('detour_ratio', 0)
-            hover_text = f"Bundled path: {path_text}<br>Detour ratio: {detour_ratio:.2f}"
-            
-            fig.add_trace(go.Scatter3d(
-                x=x_coords, 
-                y=y_coords,
-                z=z_coords,
-                mode='lines',
-                line=dict(color=color, width=width),
-                hoverinfo='text',
-                hovertext=hover_text,
-                showlegend=False,
-                name=f'bundle_{i}'
-            ))
-
-
-def _add_nodes_3d(fig: go.Figure, graph, node_positions: Dict, color: str):
-    """Add nodes to 3D visualization."""
-    node_x = [node_positions[node][0] for node in graph.nodes() if node in node_positions]
-    node_y = [node_positions[node][1] for node in graph.nodes() if node in node_positions]
-    node_z = [node_positions[node][2] for node in graph.nodes() if node in node_positions]
-    node_text = [f"{node}: {data.get('name', f'Region_{node}')}" for node, data in graph.nodes(data=True) 
-                if node in node_positions]
-    
-    fig.add_trace(go.Scatter3d(
-        x=node_x, 
-        y=node_y,
-        z=node_z,
-        mode='markers',
-        marker=dict(size=6, color=color, opacity=0.8),
-        text=node_text,
-        hoverinfo='text',
-        showlegend=False,
-        name='brain_regions'
-    ))
-
-
-def _create_smooth_3d_path(path_nodes: List, node_positions: Dict, smoothing_level: int, num_samples: int) -> List[Tuple]:
-    """Create smooth 3D Bézier curve for bundled path.
-    
-    Uses the same recursive smoothing and Bézier curve approach as 2D,
-    extended to 3D coordinates.
-    """
-    if len(path_nodes) < 2:
-        return []
-    
-    # Extract 3D coordinates from path nodes  
-    control_points = []
-    for node_id in path_nodes:
-        if node_id in node_positions:
-            x, y, z = node_positions[node_id]
-            control_points.append(np.array([x, y, z]))
-    
-    if len(control_points) < 2:
-        return []
-    
-    # Apply recursive smoothing (same algorithm as 2D, but with 3D points)
-    smoothed_points = _apply_3d_recursive_smoothing(control_points, smoothing_level)
-    
-    # Generate smooth Bézier curve in 3D
-    curve_points = _generate_3d_bezier_curve(smoothed_points, num_samples)
-    
-    return curve_points
-
-
-def _apply_3d_recursive_smoothing(points: List[np.ndarray], smoothing_level: int) -> List[np.ndarray]:
-    """Apply recursive smoothing to 3D control points."""
-    if smoothing_level <= 1 or len(points) < 2:
-        return points
-        
-    smoothed_points = points.copy()
-    
-    # Apply recursive smoothing (same as 2D implementation)
-    for level in range(1, smoothing_level):
-        new_points = []
-        
-        for i in range(len(smoothed_points) - 1):
-            # Add current point
-            new_points.append(smoothed_points[i])
-            # Add midpoint between current and next
-            midpoint = (smoothed_points[i] + smoothed_points[i + 1]) / 2.0
-            new_points.append(midpoint)
-        
-        # Add final point
-        new_points.append(smoothed_points[-1])
-        smoothed_points = new_points
-    
-    return smoothed_points
-
-
-def _evaluate_3d_bezier_curve(control_points: List[np.ndarray], t: float) -> np.ndarray:
-    """Evaluate 3D Bézier curve at parameter t using De Casteljau's algorithm."""
-    if not control_points:
-        return np.array([0, 0, 0])
-    
-    if t <= 0:
-        return control_points[0]
-    if t >= 1:
-        return control_points[-1]
-    
-    # De Casteljau's algorithm (same as 2D, works for any dimension)
-    points = control_points.copy()
-    
-    while len(points) > 1:
-        next_level = []
-        for i in range(len(points) - 1):
-            # Linear interpolation between consecutive points
-            interpolated = (1 - t) * points[i] + t * points[i + 1]
-            next_level.append(interpolated)
-        points = next_level
-    
-    return points[0]
-
-
-def _generate_3d_bezier_curve(control_points: List[np.ndarray], num_samples: int) -> List[Tuple]:
-    """Generate sampled points along 3D Bézier curve."""
-    if len(control_points) < 2:
-        if len(control_points) == 1:
-            p = control_points[0]
-            return [(float(p[0]), float(p[1]), float(p[2]))]
-        return []
-    
-    if num_samples < 2:
-        # Return endpoints only
-        start, end = control_points[0], control_points[-1]
-        return [(float(start[0]), float(start[1]), float(start[2])), 
-                (float(end[0]), float(end[1]), float(end[2]))]
-    
-    curve_points = []
-    
-    for i in range(num_samples):
-        t = i / (num_samples - 1)  # Parameter from 0 to 1
-        point = _evaluate_3d_bezier_curve(control_points, t)
-        curve_points.append((float(point[0]), float(point[1]), float(point[2])))
-    
-    return curve_points
-
-
-def _configure_3d_layout(fig: go.Figure, title: str, use_curves: bool):
-    """Configure 3D plot layout."""
-    curve_type = "Smooth curves" if use_curves else "Line segments"
-    
-    fig.update_layout(
-        title=title,
-        showlegend=False,
-        hovermode='closest',
-        margin=dict(l=0, r=0, b=0, t=40),
-        scene=dict(
-            xaxis=dict(
-                title="X (mm)",
-                backgroundcolor="rgba(0,0,0,0)",
-                gridcolor="lightgray",
-                showbackground=True,
-                zerolinecolor="gray"
-            ),
-            yaxis=dict(
-                title="Y (mm)", 
-                backgroundcolor="rgba(0,0,0,0)",
-                gridcolor="lightgray",
-                showbackground=True,
-                zerolinecolor="gray"
-            ),
-            zaxis=dict(
-                title="Z (mm)",
-                backgroundcolor="rgba(0,0,0,0)",
-                gridcolor="lightgray", 
-                showbackground=True,
-                zerolinecolor="gray"
-            ),
-            camera=dict(
-                eye=dict(x=1.5, y=1.5, z=1.5)  # Initial viewing angle
-            ),
-            aspectmode='cube'  # Maintain proportions
-        ),
-        annotations=[
-            dict(
-                text=f"Use mouse to rotate, zoom, and pan | Red: bundled paths ({curve_type}), Gray: direct connections",
-                showarrow=False,
-                xref="paper", yref="paper",
-                x=0.5, y=0.02,
-                xanchor='center', yanchor='bottom',
-                font=dict(size=12, color='gray')
-            )
-        ]
-    )
+if __name__ == "__main__":
+    test_plotly_visualization()
