@@ -146,12 +146,16 @@ Thumbs.db
 
 # Project specific
 # Large dataset files (will be downloaded separately)
+data/*/*.csv
+data/*/*.json
+data/*/maps/
 *.shp
 *.shx
 *.dbf
 *.prj
 
 # Generated visualizations
+*.png
 *.pdf
 *.svg
 spherical_texture.png
@@ -164,7 +168,6 @@ experiments/
 # Temporary files
 temp/
 tmp/
-
 *.tmp
 
 # Log files
@@ -174,8 +177,4 @@ tmp/
 *.ipynb
 !*-template.ipynb
 
-
-
-documentation/images/*.mp4
-*.mp4
-*.mov
+src/data_loader
