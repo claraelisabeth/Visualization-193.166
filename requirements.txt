@@ -1,0 +1,30 @@
+# Core dependencies
+numpy>=1.24.0
+pandas>=2.0.0
+networkx>=3.1
+matplotlib>=3.7.0
+tqdm>=4.65.0
+numba>=0.57.0
+
+# Geospatial visualization (Phase 1)
+geopandas>=0.13.0
+shapely>=2.0.0
+
+# Interactive dashboard (Phase 2)
+dash>=2.14.0
+plotly>=5.15.0
+dash-bootstrap-components>=1.4.0
+
+# 3D visualization extensions (Phase 2)
+# dash-threejs  # Will be added when needed
+
+# Data handling
+scikit-learn>=1.3.0  # For brain connectivity data processing
+
+# Development and testing
+pytest>=7.4.0
+jupyter>=1.0.0
+notebook>=6.5.0
+
+# Optional: Performance monitoring
+# psutil>=5.9.0
