@@ -13,11 +13,14 @@ import pandas as pd
 import networkx as nx
 from typing import Dict, List, Tuple, Optional
 import logging
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from ..core.bundling import create_graph
+import sys
+sys.path.append(str(Path(__file__).parent.parent))
+from core.bundling import create_graph
 
 
 def load_airports(airports_file: str) -> Dict:
@@ -95,7 +98,7 @@ def load_routes(routes_file: str, airports: Dict) -> List[Tuple[int, int]]:
         return []
 
 
-def load_air_traffic_data(airports_file: str, routes_file: str, distance: str = 'haversine') -> Optional[nx.DiGraph]:
+def load_air_traffic_data(airports_file: str, routes_file: str) -> Optional[nx.DiGraph]:
     """Load complete air traffic dataset and create NetworkX graph"""
     # Load data
     airports = load_airports(airports_file)
@@ -111,7 +114,7 @@ def load_air_traffic_data(airports_file: str, routes_file: str, distance: str = 
     # Convert airports dict to list format expected by create_graph
     nodes = list(airports.values())
     
-    graph = create_graph(nodes, routes, distance_type=distance)
+    graph = create_graph(nodes, routes, distance_type='haversine')
     
     logger.info(f"Created air traffic graph: {graph.number_of_nodes()} airports, {graph.number_of_edges()} routes")
 
