@@ -29,39 +29,21 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 def euclidean_distance(x1: float, y1: float, x2: float, y2: float, 
-                      z1: Optional[float] = None, z2: Optional[float] = None) -> float:
-    """
-    Calculate Euclidean distance between two points.
-    """
-    dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
-    if z1 is not None and z2 is not None:
-        dist = math.sqrt(dist**2 + (z2-z1)**2)
-
-    return dist
+                       z1: Optional[float] = None, z2: Optional[float] = None) -> float:
+    dx = x2 - x1
+    dy = y2 - y1
+    dz = 0.0 if (z1 is None or z2 is None) else (z2 - z1)
+    return math.sqrt(dx*dx + dy*dy + dz*dz)
 
 
 def create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str = 'euclidean') -> nx.DiGraph:
-    """
-    Create NetworkX graph with spatial nodes and weighted edges.
-    
-    Args:
-        nodes: List of dicts with keys: 'id', 'x', 'y', optional 'z', 'name'
-        edges: List of (source_id, target_id) tuples
-        distance_type: 'euclidean' or 'haversine'
-    
-    Returns:
-        NetworkX DiGraph with edge weights based on spatial distance
-    """
+    """Create NetworkX graph with spatial nodes and weighted edges"""
     G = nx.DiGraph()
     
     # Add nodes with position attributes
     for node in nodes:
-        G.add_node(node['id'], 
-                  x=node['x'], 
-                  y=node['y'],
-                  z=node.get('z'),
-                  name=node.get('name', ''))
-    
+        G.add_node(node['id'], x=node['x'], y=node['y'], z=node.get('z'))
+
     # Add edges with weights based on spatial distance
     for source, target in edges:
         if source not in G or target not in G:
@@ -84,6 +66,26 @@ def create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str = 'eu
     return G
 
 
+def initialize_edge_attributes(G: nx.DiGraph, d: float = 1.0) -> None:
+    for u, v in G.edges():
+        # edge length in the input drawing D_G
+        ux, uy = G.nodes[u]["x"], G.nodes[u]["y"]
+        vx, vy = G.nodes[v]["x"], G.nodes[v]["y"]
+        length = euclidean_distance((ux, uy), (vx, vy))
+
+        G.edges[u, v]["length"] = length
+        G.edges[u, v]["weight"] = length ** d
+        G.edges[u, v]["locked"] = False   # lock(e) <- False
+        G.edges[u, v]["skip"] = False     # skip(e) <- False  (not strictly needed, but mirrors paper)
+
+
+def get_sorted_edges(G: nx.DiGraph):
+    graph = G.copy()
+    return sorted(graph.edges(),
+                  key=lambda e: graph.edges[e]["weight"],
+                  reverse=True)
+
+
 def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
     """
     Main edge bundling algorithm.
@@ -99,7 +101,7 @@ def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
     stats = {'total_edges': 0, 'bundled': 0, 'no_path': 0, 'too_long': 0}
     
     # Create a working copy to modify during bundling
-    working_graph = graph.copy()
+    working_graph = get_sorted_edges(graph)
     
     # Process each edge in original graph
     # sorce and target in Algorithm 1 is already extracted and looped over
