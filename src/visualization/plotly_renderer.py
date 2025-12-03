@@ -371,7 +371,7 @@ def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color:
             lon0, lat0 = node_positions[u]
             lon1, lat1 = node_positions[v]
             
-            fig.add_trace(go.Scattermap(
+            fig.add_trace(go.Scattergeo(
                 lon=[lon0, lon1], 
                 lat=[lat0, lat1],
                 mode='lines',
@@ -403,7 +403,7 @@ def _add_bundled_curves_map(fig: go.Figure, bundled_paths: List[Dict],
             detour_ratio = bundle.get('detour_ratio', 0)
             hover_text = f"Bundled path: {path_text}<br>Detour ratio: {detour_ratio:.2f}"
             
-            fig.add_trace(go.Scattermap(
+            fig.add_trace(go.Scattergeo(
                 lon=lon_coords, 
                 lat=lat_coords,
                 mode='lines',
@@ -436,7 +436,7 @@ def _add_bundled_segments_map(fig: go.Figure, bundled_paths: List[Dict],
             detour_ratio = bundle.get('detour_ratio', 0)
             hover_text = f"Bundled path: {path_text}<br>Detour ratio: {detour_ratio:.2f}"
             
-            fig.add_trace(go.Scattermap(
+            fig.add_trace(go.Scattergeo(
                 lon=lon_coords, 
                 lat=lat_coords,
                 mode='lines',
@@ -455,7 +455,7 @@ def _add_nodes_map(fig: go.Figure, graph, node_positions: Dict, color: str):
     node_text = [f"{node}: {data.get('name', '')}" for node, data in graph.nodes(data=True) 
                 if node in node_positions]
     
-    fig.add_trace(go.Scattermap(
+    fig.add_trace(go.Scattergeo(
         lon=node_lon, 
         lat=node_lat,
         mode='markers',
@@ -477,10 +477,19 @@ def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool):
         showlegend=False,
         hovermode='closest',
         margin=dict(b=20, l=5, r=5, t=40),
-        map=dict(
-            style="open-street-map",  # Free map style
-            center=dict(lat=20, lon=0),  # Center roughly on world
-            zoom=1
+        geo=dict(
+            projection_type="natural earth",
+            showland=True,
+            landcolor="rgb(217, 217, 217)",
+            showocean=True,
+            oceancolor="rgb(230, 245, 255)",
+            showlakes=True,
+            lakecolor="rgb(230, 245, 255)",
+            showcountries=True,
+            countrycolor="rgb(180, 180, 180)",
+            coastlinecolor="rgb(180, 180, 180)",
+            center=dict(lat=20, lon=0),
+            projection_scale=0.8
         ),
         annotations=[
             dict(
