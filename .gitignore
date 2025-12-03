@@ -148,6 +148,8 @@ Thumbs.db
 # Large dataset files (will be downloaded separately)
 data/*/*.csv
 data/*/*.json
+data/*/*.dat
+data/*/*.txt
 data/*/maps/
 *.shp
 *.shx
@@ -176,5 +178,3 @@ tmp/
 # Jupyter notebook outputs (keep notebooks but not outputs)
 *.ipynb
 !*-template.ipynb
-
-src/data_loader
