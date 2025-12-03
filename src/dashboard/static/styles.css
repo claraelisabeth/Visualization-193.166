@@ -66,16 +66,16 @@ body {
     right: 25px;
 
     width: 65vw;
-    height: 50vh;
+    height: 70vh;
 }
 
 #change-parameters {
     position: absolute;
     border : 2px solid black;
-    top: 340px;
+    top: 320px;
 
     width: 30vw;
-    height: 55vh;
+    height: 60vh;
 }
 
 #normal-text {

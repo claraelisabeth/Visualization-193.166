@@ -44,158 +44,173 @@ def create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str = 'eu
     for node in nodes:
         G.add_node(node['id'], x=node['x'], y=node['y'], z=node.get('z'))
 
-    # Add edges with weights based on spatial distance
+    # Add edges
     for source, target in edges:
         if source not in G or target not in G:
             continue
-            
-        # Calculate distance
-        s_attrs = G.nodes[source]
-        t_attrs = G.nodes[target]
-        
-        if distance_type == 'haversine':
-            weight = haversine_distance(s_attrs['y'], s_attrs['x'], 
-                                      t_attrs['y'], t_attrs['x'])
-        else:  # euclidean
-            weight = euclidean_distance(s_attrs['x'], s_attrs['y'],
-                                      t_attrs['x'], t_attrs['y'],
-                                      s_attrs['z'], t_attrs['z'])
-        
-        G.add_edge(source, target, weight=weight, bundled=False)
+        G.add_edge(source, target, bundled=False)
+    
+    # Initialize edge attributes
+    initialize_edge_attributes(G, distance_type=distance_type)
     
     return G
 
 
-def initialize_edge_attributes(G: nx.DiGraph, d: float = 1.0) -> None:
+def initialize_edge_attributes(G: nx.DiGraph, distance_type: str = 'euclidean') -> None:
+    """Initialize edge attributes: length, locked, skip (weight calculated later)"""
     for u, v in G.edges():
-        # edge length in the input drawing D_G
         ux, uy = G.nodes[u]["x"], G.nodes[u]["y"]
         vx, vy = G.nodes[v]["x"], G.nodes[v]["y"]
-        length = euclidean_distance((ux, uy), (vx, vy))
+        uz = G.nodes[u].get("z")
+        vz = G.nodes[v].get("z")
+
+        # Calculate distance based on type
+        if distance_type == 'haversine':
+            length = haversine_distance(uy, ux, vy, vx)  # lat, lon order
+        else:  # euclidean
+            length = euclidean_distance(ux, uy, vx, vy, uz, vz)
 
         G.edges[u, v]["length"] = length
-        G.edges[u, v]["weight"] = length ** d
-        G.edges[u, v]["locked"] = False   # lock(e) <- False
-        G.edges[u, v]["skip"] = False     # skip(e) <- False  (not strictly needed, but mirrors paper)
+        G.edges[u, v]["locked"] = False
+        G.edges[u, v]["skip"] = False
 
 
-def get_sorted_edges(G: nx.DiGraph):
-    graph = G.copy()
-    return sorted(graph.edges(),
-                  key=lambda e: graph.edges[e]["weight"],
+def update_attributes(graph: nx.DiGraph, d: float = 1.0) -> None:
+    """Prepare graph for bundling by calculating weights and resetting state."""
+    for u, v in graph.edges():
+        length = graph.edges[u, v]["length"]
+        graph.edges[u, v]["weight"] = length ** d
+        # Reset bundling state for fresh run
+        graph.edges[u, v]["locked"] = False
+        graph.edges[u, v]["skip"] = False
+
+
+def sort_edges(graph: nx.DiGraph) -> List[Tuple]:
+    """Returns edges sorted by weight in descending order (heaviest first)"""
+    return sorted(graph.edges(), 
+                  key=lambda e: graph.edges[e]['weight'], 
                   reverse=True)
 
 
-def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
+def dijkstra_with_skip(graph: nx.DiGraph, source, target) -> Optional[List]:
+    """Find shortest path from source to target, excluding edges where skip=True"""
+    # Create temporary graph without 'skip' edges
+    temp_graph = graph.copy()
+    edges_to_remove = [(u, v) for u, v, data in temp_graph.edges(data=True) 
+                       if data.get('skip', False)]
+    temp_graph.remove_edges_from(edges_to_remove)
+    
+    try:
+        return nx.dijkstra_path(temp_graph, source, target, weight='weight')
+    except nx.NetworkXNoPath:
+        return None
+
+
+def calculate_path_length(graph: nx.DiGraph, path: List) -> float:
     """
-    Main edge bundling algorithm.
+    Calculate the total length of a path through the graph.
     
     Args:
-        graph: NetworkX DiGraph with weighted edges
-        max_detour_ratio: Maximum allowed detour ratio (k_max in paper)
+        graph: NetworkX DiGraph with edge 'length' attributes
+        path: List of node IDs forming the path
+        
+    Returns:
+        Total length of the path
+    """
+    if len(path) < 2:
+        return 0.0
+    
+    total_length = 0.0
+    for i in range(len(path) - 1):
+        u, v = path[i], path[i + 1]
+        if graph.has_edge(u, v):
+            total_length += graph.edges[u, v]['length']
+        else:
+            # This shouldn't happen if path is valid
+            return float('inf')
+    
+    return total_length
+
+
+def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
+    """
+    Algorithm 1: Edge-Path Bundling Algorithm
+    
+    Input: Graph G = (V,E), input drawing DG, maximum distortion k, edge weight factor d.
+    Output: Control points for an Edge-Path bundled drawing Γ.
+    
+    Args:
+        graph: NetworkX DiGraph with initialized edge attributes (length, locked, skip)
+        k: Maximum distortion (detour ratio)
+        d: Edge weight factor (from slider)
     
     Returns:
-        Dict with bundled paths and statistics
+        Dict with bundled paths and control points
     """
     bundled_paths = []
-    stats = {'total_edges': 0, 'bundled': 0, 'no_path': 0, 'too_long': 0}
     
-    # Create a working copy to modify during bundling
-    working_graph = get_sorted_edges(graph)
+    # Adjust weights with current d parameter and reset state
+    update_attributes(graph, d)
     
-    # Process each edge in original graph
-    # sorce and target in Algorithm 1 is already extracted and looped over
-    # TODO sorting edges?
-    for source, target in graph.edges():
-        stats['total_edges'] += 1
-        
-        # Skip if already bundled
-        # if lock(e)
-        if graph.edges[source, target]['bundled']:
+    # Step 1: Algorithm 1 Line 5 - sortedEdges ← sortDescending(E, weight)
+    sorted_edges = sort_edges(graph)
+    
+    # Step 2: Algorithm 1 Lines 6-21 - Main loop
+    for source, target in sorted_edges:
+        # Line 7: if lock(e) then continue
+        if graph.edges[source, target]['locked']:
             continue
             
-        # Calculate direct distance
-        # original edge length 
-        # but in original algorithm 1 weight(e)==edgeLength^d
-        direct_distance = graph.edges[source, target]['weight']
+        # Line 8: skip(e) ← True
+        graph.edges[source, target]['skip'] = True
         
-        # Remove this edge temporarily to find alternative path
-        if working_graph.has_edge(source, target):
-            working_graph.remove_edge(source, target)
+        # Line 9-10: s ← source(e), t ← target(e)
+        s, t = source, target
         
-        # Find shortest path without this direct edge
-        # Using dijkstra algorithm
-        try:
-            path = nx.dijkstra_path(working_graph, source, target, weight='weight')
-            path_distance = nx.dijkstra_path_length(working_graph, source, target, weight='weight')
-        except nx.NetworkXNoPath:
-            stats['no_path'] += 1
+        # Line 11: p ← dijkstraAlgorithm(G, s, t, weight, skip)
+        p = dijkstra_with_skip(graph, s, t)
+        
+        # Lines 12-13: if p == null then skip(e) ← False, continue
+        if p is None:
+            graph.edges[source, target]['skip'] = False
             continue
-
-        # if path == null : 
-        # skip(e) = False
-        # continue
         
-        # Check detour ratio
-        # if algorithm 1 if path_distance > k * direct_distance
-        # k = max_detour_ratio
-        detour_ratio = path_distance / direct_distance
+        # Lines 14-16: Calculate detour ratio and check maximum distortion
+        # detour ← length(p) / length(e)
+        path_length = calculate_path_length(graph, p)
+        direct_length = graph.edges[source, target]['length']
+        detour_ratio = path_length / direct_length
         
-        if detour_ratio > max_detour_ratio:
-            stats['too_long'] += 1
+        # if detour > k then skip(e) ← False, continue
+        if detour_ratio > k:
+            graph.edges[source, target]['skip'] = False
             continue
-            
-        # Bundle this edge
-        stats['bundled'] += 1
         
-        # Mark original edge as bundled
-        graph.edges[source, target]['bundled'] = True
+        # Lines 17-21: Bundle successful - lock path edges and store result
+        # for each edge f in p do lock(f) ← True
+        for i in range(len(p) - 1):
+            u, v = p[i], p[i + 1]
+            if graph.has_edge(u, v):
+                graph.edges[u, v]['locked'] = True
         
-        # Mark all edges in the bundling path as bundled
-        for i in range(len(path) - 1):
-            u, v = path[i], path[i + 1]
-            if working_graph.has_edge(u, v):
-                graph.edges[u, v]['bundled'] = True
-                working_graph.remove_edge(u, v)  # Remove from future path finding
-        
-        # Store bundled path information
+        # Store a bundled path
         bundled_paths.append({
             'original_edge': (source, target),
-            'path': path,
-            'direct_distance': direct_distance,
-            'path_distance': path_distance,
-            'detour_ratio': detour_ratio
+            'path': p,
+            'detour_ratio': detour_ratio,
+            'direct_length': direct_length,
+            'path_length': path_length
         })
+    
+    # Calculate statistics
+    total_edges = len(sorted_edges)
+    bundled_count = len(bundled_paths)
     
     return {
         'bundled_paths': bundled_paths,
-        'statistics': stats
+        'control_points': {},  # vertex coordinates for each bundled edge
+        'statistics': {
+            'total_edges': total_edges,
+            'bundled': bundled_count,
+        }
     }
-
-
-if __name__ == "__main__":
-    # Simple test
-    test_nodes = [
-        {'id': 'A', 'x': 0, 'y': 0, 'name': 'Node A'},
-        {'id': 'B', 'x': 1, 'y': 1, 'name': 'Node B'},
-        {'id': 'C', 'x': 2, 'y': 0, 'name': 'Node C'},
-        {'id': 'D', 'x': 1, 'y': 0, 'name': 'Node D'}
-    ]
-    
-    test_edges = [('A', 'B'), ('B', 'C'), ('A', 'D'), ('D', 'C'), ('A', 'C')]
-    
-    # Create graph
-    G = create_graph(test_nodes, test_edges)
-    print(f"Created graph with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges")
-    
-    # Run bundling algorithm
-    result = bundle_edges(G, max_detour_ratio=1.5)
-    
-    print("\nBundling Results:")
-    print(f"Total edges: {result['statistics']['total_edges']}")
-    print(f"Bundled: {result['statistics']['bundled']}")
-    print(f"No path: {result['statistics']['no_path']}")
-    print(f"Too long: {result['statistics']['too_long']}")
-    
-    for bundle in result['bundled_paths']:
-        print(f"Edge {bundle['original_edge']} bundled via path: {' -> '.join(bundle['path'])}")

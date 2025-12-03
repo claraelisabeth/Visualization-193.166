@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from core.bundling import bundle_edges
+from core.bundling import bundle_edges, create_graph
 from data_loader import (
     generate_synthetic_brain_data,
     load_migration_json,
@@ -35,7 +35,8 @@ light_green = 'rgb(168, 203, 160)'
 green = 'rgb(78, 110, 77)'
 
 # Default parameters
-DEFAULT_BUNDLING_FACTOR = 1.0
+DEFAULT_BUNDLING_FACTOR = 1.0  # k parameter - maximum detour ratio
+DEFAULT_EDGE_WEIGHT_FACTOR = 1.0  # d parameter - edge weight factor
 DEFAULT_DATASET = 'Brain (Synthetic)'
 
 # Initialize the app with assets folderI
@@ -73,8 +74,12 @@ app.layout = html.Div([
            dcc.Loading(
                id="loading-graph",
                type="default",
-               children=[dcc.Graph(figure={}, id='main-graph')],
-               style={'padding': '20px'}
+               children=[dcc.Graph(
+                   figure={}, 
+                   id='main-graph',
+                   style={'height': '75vh', 'width': '100%'}
+               )],
+               style={'padding': '15px'}
            ),
            html.Div(id='loading-status', style={
                'text-align': 'center',
@@ -112,9 +117,9 @@ app.layout = html.Div([
             )
         ], style={'padding': '0 20px'}),
         
-        # Bundling Factor Control
+        # Bundling Factor Control (k parameter)
         html.Div([
-            html.Label("Bundling Factor (k):", style={'color': brown, 'font-weight': 'bold'}),
+            html.Label("Maximum Detour Ratio (k):", style={'color': brown, 'font-weight': 'bold'}),
             html.Div(id='bundling-factor-display', style={'color': green, 'font-size': '18px', 'margin': '5px 0'}),
             html.Div([
                 dcc.Slider(
@@ -130,6 +135,25 @@ app.layout = html.Div([
             html.P("Lower values = more bundling, higher values = less bundling", 
                    style={'font-size': '12px', 'color': light_brown, 'margin-top': '10px'})
         ], style={'padding': '0 20px'}),
+        
+        # Edge Weight Factor Control (d parameter)
+        html.Div([
+            html.Label("Edge Weight Factor (d):", style={'color': brown, 'font-weight': 'bold'}),
+            html.Div(id='edge-weight-display', style={'color': green, 'font-size': '18px', 'margin': '5px 0'}),
+            html.Div([
+                dcc.Slider(
+                    id='edge-weight-slider',
+                    min=1.0,
+                    max=5.0,
+                    step=0.1,
+                    value=DEFAULT_EDGE_WEIGHT_FACTOR,
+                    marks={i: str(i) for i in range(1, 6)},
+                    tooltip={"placement": "bottom", "always_visible": True}
+                )
+            ]),
+            html.P("Higher values favor longer edges, lower values favor shorter edges", 
+                   style={'font-size': '12px', 'color': light_brown, 'margin-top': '10px'})
+        ], style={'padding': '0 20px', 'margin-top': '20px'}),
         
         # Network Size Control (for synthetic data)
         html.Div([
@@ -166,6 +190,13 @@ def update_network_size_display(value):
     return f"{value} nodes"
 
 @app.callback(
+    Output('edge-weight-display', 'children'),
+    Input('edge-weight-slider', 'value')
+)
+def update_edge_weight_display(value):
+    return f"d = {value:.1f}"
+
+@app.callback(
     Output('network-size-control', 'style'),
     Input('dataset-dropdown', 'value')
 )
@@ -180,9 +211,10 @@ def toggle_network_size_control(dataset):
     Output('loading-status', 'children'),
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
+     Input('edge-weight-slider', 'value'),
      Input('network-size-slider', 'value')]
 )
-def show_loading_message(dataset, bundling_factor, network_size):
+def show_loading_message(dataset, bundling_factor, edge_weight_factor, network_size):
     """Show immediate loading message when parameters change."""
     dataset_names = {
         'brain': 'Brain Connectivity',
@@ -197,10 +229,11 @@ def show_loading_message(dataset, bundling_factor, network_size):
     [Output('main-graph', 'figure'), Output('graph-stats', 'children'), Output('loading-status', 'children', allow_duplicate=True)],
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
+     Input('edge-weight-slider', 'value'),
      Input('network-size-slider', 'value')],
     prevent_initial_call=True
 )
-def update_graph(dataset, bundling_factor, network_size):
+def update_graph(dataset, bundling_factor, edge_weight_factor, network_size):
     """Update the main graph based on selected parameters."""
     
     # Dataset-specific status messages
@@ -233,8 +266,8 @@ def update_graph(dataset, bundling_factor, network_size):
         graph = _create_migration_demo()
         title = "Migration Flows (Demo)"
     
-    # Run bundling algorithm
-    result = bundle_edges(graph, max_detour_ratio=bundling_factor)
+    # Run bundling algorithm with new Algorithm 1 implementation
+    result = bundle_edges(graph, k=bundling_factor, d=edge_weight_factor)
     stats = result['statistics']
     
     # Create visualization with smooth Bézier curves
@@ -244,8 +277,7 @@ def update_graph(dataset, bundling_factor, network_size):
     # Create stats text
     stats_text = (f"Total edges: {stats['total_edges']} | "
                   f"Bundled: {stats['bundled']} | "
-                  f"No path: {stats['no_path']} | "
-                  f"Too long: {stats['too_long']}")
+                  f"Bundling ratio: {(stats['bundled']/stats['total_edges']*100):.1f}%")
     
     return fig, stats_text, status_msg
 
@@ -281,7 +313,6 @@ def _create_major_airports_subset(airports_file, routes_file):
 
 def _create_air_traffic_demo():
     """Create realistic air traffic network with hub structure."""
-    import networkx as nx
     import random
     import math
     
@@ -289,14 +320,14 @@ def _create_air_traffic_demo():
     hubs = ['NYC', 'LAX', 'CHI', 'DFW', 'ATL']
     regional_airports = [f'REG{i:02d}' for i in range(15)]
     
-    graph = nx.DiGraph()
+    nodes = []
     
     # Position hubs in a circle
     hub_positions = {}
     for i, hub in enumerate(hubs):
         angle = 2 * math.pi * i / len(hubs)
         hub_positions[hub] = (math.cos(angle) * 3, math.sin(angle) * 3)
-        graph.add_node(hub, x=hub_positions[hub][0], y=hub_positions[hub][1], name=hub)
+        nodes.append({'id': hub, 'x': hub_positions[hub][0], 'y': hub_positions[hub][1], 'name': hub})
     
     # Position regional airports randomly around hubs
     for i, airport in enumerate(regional_airports):
@@ -304,41 +335,48 @@ def _create_air_traffic_demo():
         hub_x, hub_y = hub_positions[hub]
         x = hub_x + random.uniform(-1.5, 1.5)
         y = hub_y + random.uniform(-1.5, 1.5)
-        graph.add_node(airport, x=x, y=y, name=airport)
+        nodes.append({'id': airport, 'x': x, 'y': y, 'name': airport})
+    
+    # Create edges
+    edges = []
     
     # Add hub-to-hub connections
     for i, hub1 in enumerate(hubs):
         for j, hub2 in enumerate(hubs):
             if i != j:
-                graph.add_edge(hub1, hub2)
+                edges.append((hub1, hub2))
     
     # Add regional-to-hub connections
     for airport in regional_airports:
         distances = []
+        airport_pos = None
+        for node in nodes:
+            if node['id'] == airport:
+                airport_pos = (node['x'], node['y'])
+                break
+        
         for hub in hubs:
-            airport_pos = (graph.nodes[airport]['x'], graph.nodes[airport]['y'])
-            hub_pos = (graph.nodes[hub]['x'], graph.nodes[hub]['y'])
+            hub_pos = hub_positions[hub]
             dist = math.sqrt((airport_pos[0] - hub_pos[0])**2 + (airport_pos[1] - hub_pos[1])**2)
             distances.append((dist, hub))
         
         distances.sort()
         for _, hub in distances[:2]:
-            graph.add_edge(airport, hub)
-            graph.add_edge(hub, airport)
+            edges.append((airport, hub))
+            edges.append((hub, airport))
     
-    return graph
+    return create_graph(nodes, edges)
 
 
 def _create_migration_demo():
     """Create migration network with regional population centers."""
-    import networkx as nx
     import random
     import math
     
     centers = ['CA', 'TX', 'FL', 'NY', 'IL', 'PA', 'OH', 'GA', 'NC', 'MI']
     smaller_cities = [f'CITY{i:02d}' for i in range(12)]
     
-    graph = nx.DiGraph()
+    nodes = []
     
     # Position major centers
     center_positions = {}
@@ -350,23 +388,30 @@ def _create_migration_demo():
             angle = 2 * math.pi * (i-5) / 5
             center_positions[center] = (math.cos(angle) * 4, math.sin(angle) * 4)
         
-        graph.add_node(center, x=center_positions[center][0], y=center_positions[center][1], name=center)
+        nodes.append({'id': center, 'x': center_positions[center][0], 'y': center_positions[center][1], 'name': center})
     
     # Position smaller cities
     for i, city in enumerate(smaller_cities):
         x = random.uniform(-5, 5)
         y = random.uniform(-5, 5)
-        graph.add_node(city, x=x, y=y, name=city)
+        nodes.append({'id': city, 'x': x, 'y': y, 'name': city})
+    
+    # Create edges
+    edges = []
     
     # Add major center connections
     for i, center1 in enumerate(centers):
         for j, center2 in enumerate(centers):
             if i != j and random.random() < 0.4:
-                graph.add_edge(center1, center2)
+                edges.append((center1, center2))
     
     # Connect smaller cities to centers
     for city in smaller_cities:
-        city_pos = (graph.nodes[city]['x'], graph.nodes[city]['y'])
+        city_pos = None
+        for node in nodes:
+            if node['id'] == city:
+                city_pos = (node['x'], node['y'])
+                break
         
         distances = []
         for center in centers:
@@ -376,11 +421,11 @@ def _create_migration_demo():
         
         distances.sort()
         for _, center in distances[:2]:
-            graph.add_edge(city, center)
+            edges.append((city, center))
             if random.random() < 0.6:
-                graph.add_edge(center, city)
+                edges.append((center, city))
     
-    return graph
+    return create_graph(nodes, edges)
 
 
 if __name__ == '__main__':

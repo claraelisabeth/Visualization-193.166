@@ -178,3 +178,6 @@ tmp/
 # Jupyter notebook outputs (keep notebooks but not outputs)
 *.ipynb
 !*-template.ipynb
+
+src/data_loader/brain_connectivity.py
+src/data_loader/migration.py
