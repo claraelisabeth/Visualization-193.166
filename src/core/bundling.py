@@ -12,7 +12,10 @@ import math
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate great circle distance between two points on Earth."""
+    """
+    Calculate great circle distance between two points on Earth.
+    This is needed for the geospacial datasets.
+    """
     R = 6371.0  # Earth radius in kilometers
     
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
@@ -27,10 +30,13 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 def euclidean_distance(x1: float, y1: float, x2: float, y2: float, 
                       z1: Optional[float] = None, z2: Optional[float] = None) -> float:
-    """Calculate Euclidean distance between two points."""
+    """
+    Calculate Euclidean distance between two points.
+    """
     dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
     if z1 is not None and z2 is not None:
         dist = math.sqrt(dist**2 + (z2-z1)**2)
+
     return dist
 
 
@@ -96,14 +102,18 @@ def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
     working_graph = graph.copy()
     
     # Process each edge in original graph
+    # sorce and target in Algorithm 1 is already extracted and looped over
+    # TODO sorting edges
     for source, target in graph.edges():
         stats['total_edges'] += 1
         
         # Skip if already bundled
+        # if lock(e)
         if graph.edges[source, target]['bundled']:
             continue
             
         # Calculate direct distance
+        # original edge length 
         direct_distance = graph.edges[source, target]['weight']
         
         # Remove this edge temporarily to find alternative path
@@ -111,14 +121,20 @@ def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
             working_graph.remove_edge(source, target)
         
         # Find shortest path without this direct edge
+        # Using dijkstra algorithm
         try:
             path = nx.shortest_path(working_graph, source, target, weight='weight')
             path_distance = nx.shortest_path_length(working_graph, source, target, weight='weight')
         except nx.NetworkXNoPath:
             stats['no_path'] += 1
             continue
+
+        # if path == null : 
+        # skip(e) = False
+        # continue
         
         # Check detour ratio
+        # not used in original algorithm
         detour_ratio = path_distance / direct_distance
         
         if detour_ratio > max_detour_ratio:

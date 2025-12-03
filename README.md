@@ -1,6 +1,52 @@
 # Visualization-193.166
 Repository for the TU Vienna Course Visualization
 
+Graph visualizations often face the problem of *edge clutter*: when you draw many edges between nodes, the drawing becomes messy, overlapping edges, and visual clutter. One popular remedy is **edge bundling**, which groups (or “bundles”) edges that are spatially or directionally similar, making the drawing cleaner.
+
+However, conventional edge bundling techniques (force-directed bundling, geometry-based bundling, confluent drawings) introduce **ambiguities**: by bundling edges, you lose clarity about which individual edge goes where, and intersections or overlaps can mislead the viewer.
+
+The paper *“Edge-Path Bundling: A Less Ambiguous Edge Bundling Approach”* by Wallinger et al. (2021) (https://arxiv.org/pdf/2108.05467) proposes a new bundling method, **Edge-Path Bundling (EPB)**, which aims to reduce such ambiguities while still cleaning up the visual clutter. The key idea: rather than arbitrarily deforming edges into bundles, each edge is guided along a *weighted shortest path* in a constructed graph (overlay) so that deviations from the straight line are minimized and interpretability is preserved.  
+They show EPB can be tuned (degree of bundling) and even handle directed edges naturally. Through quantitative metrics and visual examples, they compare EPB to previous bundling approaches and argue its superiority in reducing ambiguity while maintaining bundling benefits.
+
+
+## Data
+
+### Airtraffic
+
+The **Air Traffic** dataset consists of global flight routes between airports. It includes $|V| = 1533$ vertices (airports) and $|E| = 14825$ directed edges (routes), forming one connected component. The dataset is publicly available as part of the \textit{OpenFlights} project (https://openflights.org/data.php).
+
+
+### Migration
+
+The **Migration Flows** dataset represents directed migration flows between US counties. The version used in the original paper has approximately $|V| = 1702$ vertices and $|E| = 9726$ directed edges. The dataset is publicly available from the US Census Bureau https://www.census.gov/data/tables/2000/demo/geographic-mobility/county-to-county-migration-flows.html.
+
+
+### Brain Connectivity
+
+**Human Connectome Project (HCP)**(https://www.humanconnectome.org/study/hcp-young-adult/data-releases):   
+The connectomes were generated from MRI scans obtained from the Human Connectome Project. Undirected and directed versions of the brain graphs are available. The direction of these graphs was defined using edge frequency analysis. Graphs with up to 1058 nodes. This can be downloaded at https://braingraph.org/download-pit-group-connectomes/.
+
+We consider one graph from Scale2: *sub-OAS31172_ses-d1717_atlas-L2018_res-scale2_conndata-network_connectivity.graphml*
+- sub-OAS31172 = subject ID
+- ses-d1717 = session ID
+- atlas-L2018 = the brain atlas used (Lausanne 2018)
+- res-scale2 = resolution = 2 (≈ 83–100 regions)
+- network_connectivity.graphml = GraphML file containing the connectome
+
+Each node is a brain region and edges represent structural connections between brain regions.
+
+For the EPB we need a list of 3D coordinates for each node, edges as pairs of node indices and a weight for each connection.
+As for the weight we chose `number_of_fibers`. It reflects the strength of the connection, and it’s positive, simple, and standard.
+
+
+## TODO
+
+- 
+
+
+---
+
+# Notes for us
 Important dates:  
 29.10.24 - Topic Presentation Submission  
 30.10.24 - Topic Presentation  
@@ -57,76 +103,6 @@ Point deductions:
 - Exceptionally poor code quality (max. 5 points deduction) 
 - Late submissions (-10% for every delayed day)
 
----
 
-## Summary
-
-A summary of the paper *“Edge-Path Bundling: A Less Ambiguous Edge Bundling Approach”* by Wallinger et al. (2021) https://arxiv.org/pdf/2108.05467 
-
-### Short Summary
-
-Graph visualizations often face the problem of *edge clutter*: when you draw many edges between nodes, the drawing becomes messy, overlapping edges, and visual clutter. One popular remedy is **edge bundling**, which groups (or “bundles”) edges that are spatially or directionally similar, making the drawing cleaner.
-
-However, conventional edge bundling techniques (force-directed bundling, geometry-based bundling, confluent drawings) introduce **ambiguities**: by bundling edges, you lose clarity about which individual edge goes where, and intersections or overlaps can mislead the viewer.
-
-This paper proposes a new bundling method, **Edge-Path Bundling (EPB)**, which aims to reduce such ambiguities while still cleaning up the visual clutter. The key idea: rather than arbitrarily deforming edges into bundles, each edge is guided along a *weighted shortest path* in a constructed graph (overlay) so that deviations from the straight line are minimized and interpretability is preserved.  
-They show EPB can be tuned (degree of bundling) and even handle directed edges naturally. Through quantitative metrics and visual examples, they compare EPB to previous bundling approaches and argue its superiority in reducing ambiguity while maintaining bundling benefits.
-
-
-### EPB Method
-
-* Take an existing layout (positions of nodes + straight-line edges) as input (so EPB is a *post-processing* bundling method).
-* Overlay a *routing graph* (a geometric graph) over the layout, with nodes and edges (the overlay nodes are like “junctions” through which edges can pass).
-* For each original edge (from node A to B), compute a **weighted shortest path** in this routing graph from A to B. The weight formulation combines *Euclidean distance* and *geodesic (overlay) distance* so edges prefer to stick near straight line, but can deviate if bundling is beneficial.
-* By clustering edges to shared overlay segments, bundling emerges. However, because edges are guided by shortest path, the ambiguity (like edge crossing overlap or unclear mapping) is minimized.
-* They provide control parameters to adjust *how strongly* edges are pulled into bundles (how much deviation is allowed), e.g. weights, thresholds.
-* For *directed edges*, the shortest path approach naturally supports directionality (you can prefer directed flows in the overlay).
-
-Some deeper insights:
-
-**Routing Graph / Overlay Construction**
-To allow edges to bend and bundle, EPB overlays a graph over the plane. The nodes of this overlay graph may be grid points, strategically placed junctions, or other geometric points. Edges of the overlay link these junctions. The original graph’s nodes are connected to the nearest overlay nodes (or inserted into the overlay). So every original edge becomes a path through this overlay.
-
-**Weighting / Cost Function**  
-  The cost for traversing overlay edges is not uniform. It is defined as a combination:
-
-  $$
-  c(e) = \alpha \cdot d_{\text{Euclidean}} + \beta \cdot d_{\text{overlay}}
-  $$
-
-  where $(d_{\text{Euclidean}})$ is (roughly) how far from the straight-line path the overlay edge deviates, and $(d_{\text{overlay}})$ is the intrinsic overlay distance. The parameters $\alpha$, $\beta$ (or equivalent) allow you to adjust how strictly the edge stays straight vs how much it gets pulled into a bundle.
-
-**Shortest Path for Each Edge**  
-  For each original edge, compute a shortest path in the overlay graph from its source to its target, with the above cost metric. Because many edges may share parts of the overlay, bundling arises naturally: common subpaths are reused.
-
-**Ambiguity Avoidance**  
-  Because each edge has a “preferred route” (the shortest path), there is a clearer mapping from original edge to visual route — you avoid arbitrary bending that hides which edge is which. Also, by limiting the deviation cost, edges that diverge too much are disfavored, so overlap is controlled.
-
-**Directed Edges**  
-  If edges have direction, they can influence the shortest path search (e.g. only allow overlay traversal consistent with direction, or weight forward vs backward differently). So EPB can handle directionality in bundling.
-
-**Parameter Tuning / Bundling Strength**  
-  The user can adjust how strongly bundling is enforced (i.e. how willing edges are to deviate). If bundling strength is low, edges remain close to their original straight-line. If stronger, more edges will share overlay subpaths. It’s a trade-off between clutter reduction and preserving interpretability.
-
-**Ambiguity and Metrics**  
-*Ambiguity*:   e.g. where two edges cross or overlap in a way that the viewer can’t tell which one is which
-*Ambiguity Metrics*:   
-
-
-
-
-### Cheat Sheet Summary 
-
-| Aspect            | Description                                                                                                   |
-| ----------------- | ------------------------------------------------------------------------------------------------------------- |
-| Problem addressed | Edge clutter + ambiguity in graph drawings                                                                    |
-| Proposed method   | **Edge-Path Bundling (EPB)**                                                                                  |
-| Core idea         | Overlay a routing graph; for each edge, compute a weighted shortest path (balancing straightness vs bundling) |
-| Key benefit       | Reduces ambiguity (overlaps, confusion) compared to many existing bundling methods                            |
-| Control           | Parameters allow tuning bundling strength vs deviation                                                        |
-| Directed edges    | Naturally supported                                                                                           |
-| Evaluation        | Visual examples + ambiguity metrics show EPB outperforms baseline bundling methods in many cases              |
-| Limitations       | Computational cost, parameter sensitivity, overlay design, scalability                                        |
-| Best use cases    | Graphs where edge traceability matters but clutter needs mitigation                                           |
 
 
