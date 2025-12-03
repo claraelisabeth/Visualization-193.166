@@ -105,7 +105,7 @@ def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
     
     # Process each edge in original graph
     # sorce and target in Algorithm 1 is already extracted and looped over
-    # TODO sorting edges
+    # TODO sorting edges?
     for source, target in graph.edges():
         stats['total_edges'] += 1
         
@@ -116,6 +116,7 @@ def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
             
         # Calculate direct distance
         # original edge length 
+        # but in original algorithm 1 weight(e)==edgeLength^d
         direct_distance = graph.edges[source, target]['weight']
         
         # Remove this edge temporarily to find alternative path
@@ -125,8 +126,8 @@ def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
         # Find shortest path without this direct edge
         # Using dijkstra algorithm
         try:
-            path = nx.shortest_path(working_graph, source, target, weight='weight')
-            path_distance = nx.shortest_path_length(working_graph, source, target, weight='weight')
+            path = nx.dijkstra_path(working_graph, source, target, weight='weight')
+            path_distance = nx.dijkstra_path_length(working_graph, source, target, weight='weight')
         except nx.NetworkXNoPath:
             stats['no_path'] += 1
             continue
@@ -136,7 +137,8 @@ def bundle_edges(graph: nx.DiGraph, max_detour_ratio: float = 2.0) -> Dict:
         # continue
         
         # Check detour ratio
-        # not used in original algorithm
+        # if algorithm 1 if path_distance > k * direct_distance
+        # k = max_detour_ratio
         detour_ratio = path_distance / direct_distance
         
         if detour_ratio > max_detour_ratio:
