@@ -84,6 +84,28 @@ def _is_geographic_data(node_positions: Dict) -> bool:
     return x_in_lon_range and y_in_lat_range and x_range > 1 and y_range > 1
 
 
+def _is_us_data(node_positions: Dict) -> bool:
+    """Check if node positions are likely US coordinates."""
+    if not node_positions:
+        return False
+    
+    # Sample positions to check if they're in US bounds
+    positions = list(node_positions.values())[:20]  # Check more nodes for accuracy
+    
+    x_coords = [pos[0] for pos in positions]  # longitude
+    y_coords = [pos[1] for pos in positions]  # latitude
+    
+    # US bounds (roughly): longitude -180 to -60, latitude 15 to 75
+    us_lon_range = all(-180 <= x <= -60 for x in x_coords)
+    us_lat_range = all(15 <= y <= 75 for y in y_coords)
+    
+    # Check if most coordinates are in continental US range
+    continental_us_count = sum(1 for x, y in zip(x_coords, y_coords) 
+                              if -130 <= x <= -65 and 20 <= y <= 50)
+    
+    return us_lon_range and us_lat_range and continental_us_count >= len(positions) * 0.7
+
+
 def _create_map_visualization(graph, bundled_paths: List[Dict], node_positions: Dict, title: str,
                              use_curves: bool, smoothing_level: int, num_samples: int) -> go.Figure:
     """Create map-based visualization for geographic data."""
@@ -107,7 +129,7 @@ def _create_map_visualization(graph, bundled_paths: List[Dict], node_positions: 
     _add_nodes_map(fig, graph, node_positions, node_color)
     
     # Configure map layout
-    _configure_map_layout(fig, title, use_curves)
+    _configure_map_layout(fig, title, use_curves, node_positions)
     
     return fig
 
@@ -136,7 +158,7 @@ def _create_scatter_visualization(graph, bundled_paths: List[Dict], node_positio
     _add_nodes(fig, graph, node_positions, node_color)
     
     # Configure layout
-    _configure_layout(fig, title, use_curves)
+    _configure_layout(fig, title, use_curves, node_positions)
     
     return fig
 
@@ -247,31 +269,83 @@ def _add_nodes(fig: go.Figure, graph, node_positions: Dict, color: str):
     ))
 
 
-def _configure_layout(fig: go.Figure, title: str, use_curves: bool):
+def _configure_layout(fig: go.Figure, title: str, use_curves: bool, node_positions: Dict = None):
     """Configure the plot layout."""
     curve_type = "Smooth Bézier curves" if use_curves else "Line segments"
     annotation_text = f"Red: bundled paths ({curve_type}), Gray: direct edges"
     
-    fig.update_layout(
-        title=title,
-        showlegend=False,
-        hovermode='closest',
-        margin=dict(b=20, l=5, r=5, t=40),
-        annotations=[
-            dict(
-                text=annotation_text,
-                showarrow=False, 
-                xref="paper", yref="paper",
-                x=0.005, y=-0.002, 
-                xanchor='left', yanchor='bottom',
-                font=dict(size=12, color='gray')
-            )
-        ],
-        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)'
-    )
+    # Check if this might be geographic data based on coordinate ranges
+    is_geographic = False
+    if node_positions:
+        positions = list(node_positions.values())[:10]
+        if positions:
+            x_coords = [pos[0] for pos in positions]
+            y_coords = [pos[1] for pos in positions]
+            # Check if coordinates look like lat/lon
+            x_in_lon_range = all(-180 <= x <= 180 for x in x_coords)
+            y_in_lat_range = all(-90 <= y <= 90 for y in y_coords)
+            x_range = max(x_coords) - min(x_coords)
+            y_range = max(y_coords) - min(y_coords)
+            is_geographic = x_in_lon_range and y_in_lat_range and x_range > 1 and y_range > 1
+    
+    if is_geographic:
+        # Geographic scatter plot with visible axes and light grid
+        fig.update_layout(
+            title=title,
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=60, l=60, r=20, t=40),
+            annotations=[
+                dict(
+                    text=annotation_text,
+                    showarrow=False, 
+                    xref="paper", yref="paper",
+                    x=0.005, y=-0.002, 
+                    xanchor='left', yanchor='bottom',
+                    font=dict(size=12, color='gray')
+                )
+            ],
+            xaxis=dict(
+                title="Longitude", 
+                showgrid=True, 
+                gridcolor='lightgray',
+                gridwidth=0.5,
+                showticklabels=True,
+                tickfont=dict(size=10)
+            ),
+            yaxis=dict(
+                title="Latitude", 
+                showgrid=True, 
+                gridcolor='lightgray',
+                gridwidth=0.5,
+                showticklabels=True,
+                tickfont=dict(size=10)
+            ),
+            plot_bgcolor='white',
+            paper_bgcolor='white'
+        )
+    else:
+        # Standard network plot with minimal styling
+        fig.update_layout(
+            title=title,
+            showlegend=False,
+            hovermode='closest',
+            margin=dict(b=20, l=5, r=5, t=40),
+            annotations=[
+                dict(
+                    text=annotation_text,
+                    showarrow=False, 
+                    xref="paper", yref="paper",
+                    x=0.005, y=-0.002, 
+                    xanchor='left', yanchor='bottom',
+                    font=dict(size=12, color='gray')
+                )
+            ],
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
 
 
 def create_comparison_visualization(graph, bundled_paths: List[Dict], title: str) -> go.Figure:
@@ -326,34 +400,6 @@ def create_comparison_visualization(graph, bundled_paths: List[Dict], title: str
         fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, row=1, col=i)
     
     return fig
-
-
-# Test function
-def test_plotly_visualization():
-    """Test the plotly visualization with synthetic data."""
-    import networkx as nx
-    from ..core.bundling import create_graph, bundle_edges
-    
-    # Create test graph
-    nodes = [
-        {'id': 0, 'x': 0, 'y': 0, 'name': 'A'},
-        {'id': 1, 'x': 1, 'y': 1, 'name': 'B'},
-        {'id': 2, 'x': 2, 'y': 0, 'name': 'C'},
-        {'id': 3, 'x': 1, 'y': -1, 'name': 'D'}
-    ]
-    
-    edges = [(0, 1), (1, 2), (0, 3), (3, 2), (0, 2)]
-    
-    graph = create_graph(nodes, edges)
-    result = bundle_edges(graph, max_detour_ratio=1.8)
-    
-    # Create visualization
-    fig = create_network_visualization(graph, result['bundled_paths'], 
-                                     "Test Network with Smooth Curves")
-    
-    print(f"Created visualization with {len(result['bundled_paths'])} bundled paths")
-    return fig
-
 
 # Map-specific visualization functions
 def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color: str):
@@ -467,30 +513,46 @@ def _add_nodes_map(fig: go.Figure, graph, node_positions: Dict, color: str):
     ))
 
 
-def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool):
-    """Configure the map layout."""
+def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool, node_positions: Dict = None):
+    """Configure the map layout with automatic US detection."""
     curve_type = "Smooth Bézier curves" if use_curves else "Line segments"
     annotation_text = f"Red: bundled paths ({curve_type}), Gray: direct routes"
+    
+    # Detect if this is US data and configure accordingly
+    if node_positions and _is_us_data(node_positions):
+        # US-focused configuration with simpler settings for better compatibility
+        geo_config = dict(
+            projection=dict(type="albers usa"),  # Use built-in US projection
+            showland=True,
+            landcolor="rgb(243, 243, 243)",
+            showocean=True,
+            oceancolor="rgb(204, 229, 255)", 
+            showlakes=True,
+            lakecolor="rgb(204, 229, 255)",
+            showsubunits=True,  # Show state boundaries
+            subunitcolor="rgb(150, 150, 150)",
+            scope="usa"
+        )
+    else:
+        # World map configuration with simpler settings
+        geo_config = dict(
+            projection=dict(type="natural earth"),
+            showland=True,
+            landcolor="rgb(243, 243, 243)",
+            showocean=True,
+            oceancolor="rgb(204, 229, 255)",
+            showlakes=True,
+            lakecolor="rgb(204, 229, 255)",
+            showcountries=True,
+            countrycolor="rgb(150, 150, 150)"
+        )
     
     fig.update_layout(
         title=title,
         showlegend=False,
         hovermode='closest',
         margin=dict(b=20, l=5, r=5, t=40),
-        geo=dict(
-            projection_type="natural earth",
-            showland=True,
-            landcolor="rgb(217, 217, 217)",
-            showocean=True,
-            oceancolor="rgb(230, 245, 255)",
-            showlakes=True,
-            lakecolor="rgb(230, 245, 255)",
-            showcountries=True,
-            countrycolor="rgb(180, 180, 180)",
-            coastlinecolor="rgb(180, 180, 180)",
-            center=dict(lat=20, lon=0),
-            projection_scale=0.8
-        ),
+        geo=geo_config,
         annotations=[
             dict(
                 text=annotation_text,
@@ -502,7 +564,3 @@ def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool):
             )
         ]
     )
-
-
-if __name__ == "__main__":
-    test_plotly_visualization()
