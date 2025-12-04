@@ -23,6 +23,7 @@ from data_loader import (
     load_migration_json,
     load_air_traffic_data
 )
+from data_loader.migration import load_outflow_data
 from visualization import create_network_visualization
 
 # UI Colors
@@ -262,15 +263,23 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, network_size):
         else:
             title = f"Air Traffic Network ({graph.number_of_nodes()} major airports)"
     else:  # migration
-        # Create migration network with regional hubs
-        graph = _create_migration_demo()
-        title = "Migration Flows (Demo)"
+        # Load real US migration data with performance optimization
+        outflow_file = "data/migration/outflow.txt"
+        graph = _create_migration_subset(outflow_file)
+        if graph is None:
+            # Fallback to demo data if loading fails
+            graph = _create_migration_demo()
+            title = "Migration Flows (Demo - file load failed)"
+            status_msg = "⚠ Migration data failed, using demo data"
+        else:
+            title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
     
     # Run bundling algorithm with new Algorithm 1 implementation
     result = bundle_edges(graph, k=bundling_factor, d=edge_weight_factor)
     stats = result['statistics']
     
     # Create visualization with smooth Bézier curves
+    # Let migration data use map visualization (auto-detect geographic coordinates)
     fig = create_network_visualization(graph, result['bundled_paths'], title, 
                                      use_curves=True, smoothing_level=2, num_samples=100)
     
@@ -366,6 +375,44 @@ def _create_air_traffic_demo():
             edges.append((hub, airport))
     
     return create_graph(nodes, edges)
+
+
+def _create_migration_subset(outflow_file):
+    """Create smaller subset of migration data for dashboard performance, excluding Alaska/Hawaii."""
+    try:
+        # Load with high threshold for only major flows
+        full_graph = load_outflow_data(outflow_file, min_flow_threshold=3000)
+        if not full_graph:
+            return None
+            
+        # Filter out Alaska (02xxx) and Hawaii (15xxx) FIPS codes
+        continental_nodes = []
+        for node in full_graph.nodes():
+            fips_state = str(node)[:2]  # First 2 digits = state FIPS
+            if fips_state not in ['02', '15']:  # Exclude Alaska and Hawaii
+                continental_nodes.append(node)
+        
+        # Create subgraph with only continental US counties
+        continental_graph = full_graph.subgraph(continental_nodes).copy()
+        
+        # Get counties with most connections within continental US
+        county_degrees = []
+        for node in continental_graph.nodes():
+            degree = continental_graph.in_degree(node) + continental_graph.out_degree(node)
+            county_degrees.append((degree, node))
+        
+        # Sort by degree and take top counties for performance
+        county_degrees.sort(reverse=True)
+        major_counties = [node for _, node in county_degrees[:100]]  # Top 100 most connected counties for performance
+        
+        # Create final subgraph with only major continental counties
+        subgraph = continental_graph.subgraph(major_counties).copy()
+        
+        return subgraph
+        
+    except Exception as e:
+        print(f"Error creating migration subset: {e}")
+        return None
 
 
 def _create_migration_demo():
