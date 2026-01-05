@@ -158,7 +158,7 @@ def load_migration_json(json_file: str) -> Optional[nx.DiGraph]:
         return None
 
 
-def load_outflow_data(outflow_file: str, min_flow_threshold: int = 100) -> Optional[nx.DiGraph]:
+def load_outflow_data(outflow_file: str, min_flow_threshold: int = 100, distance: str = 'euclidean') -> Optional[nx.DiGraph]:
     """
     Load migration data from outflow.txt format (space-separated: origin dest volume).
     
@@ -202,7 +202,7 @@ def load_outflow_data(outflow_file: str, min_flow_threshold: int = 100) -> Optio
         # Convert counties dict to list format
         nodes = list(counties.values())
         
-        graph = create_graph(nodes, flows, distance_type='euclidean')
+        graph = create_graph(nodes, flows, distance_type=distance)
         
         logger.info(f"Created migration graph from outflow: {graph.number_of_nodes()} counties, {graph.number_of_edges()} flows")
         

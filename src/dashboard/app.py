@@ -161,7 +161,7 @@ app.layout = html.Div([
             dcc.Dropdown(
                 id='distance-dropdown',
                 options=[
-                    {'label': 'Eucledian', 'value': 'eucledian'},
+                    {'label': 'Euclidean', 'value': 'euclidean'},
                     {'label': 'Haversine', 'value': 'haversine'}
                 ],
                 value='eucledian',
@@ -235,12 +235,12 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, distance):
         # Load OpenFlights data (subset for performance)
         airports_file = "data/air_traffic/airports.dat"
         routes_file = "data/air_traffic/routes.dat"
-        graph = _create_major_airports_subset(airports_file, routes_file)
+        graph = _create_major_airports_subset(airports_file, routes_file, distance)
         title = f"Air Traffic Network ({graph.number_of_nodes()} major airports)"
     else:  # migration
         # Load US migration data with performance optimization
         outflow_file = "data/migration/outflow.txt"
-        graph = _create_migration_subset(outflow_file)
+        graph = _create_migration_subset(outflow_file, distance)
         title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
     
     # Run bundling algorithm with new Algorithm 1 implementation
@@ -262,10 +262,10 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, distance):
 
 
 
-def _create_major_airports_subset(airports_file, routes_file):
+def _create_major_airports_subset(airports_file, routes_file, distance):
     """Create subset of major airports from real data for better performance."""
     try:
-        graph = load_air_traffic_data(airports_file, routes_file)
+        graph = load_air_traffic_data(airports_file, routes_file, distance)
         if not graph:
             return None
             
@@ -290,11 +290,11 @@ def _create_major_airports_subset(airports_file, routes_file):
 
 
 
-def _create_migration_subset(outflow_file):
+def _create_migration_subset(outflow_file, distance):
     """Create smaller subset of migration data for dashboard performance, excluding Alaska/Hawaii."""
     try:
         # Load with high threshold for only major flows
-        full_graph = load_outflow_data(outflow_file, min_flow_threshold=3000)
+        full_graph = load_outflow_data(outflow_file, min_flow_threshold=3000, distance=distance)
         if not full_graph:
             return None
             
