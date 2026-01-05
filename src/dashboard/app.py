@@ -23,6 +23,7 @@ from data_loader import (
     load_migration_json,
     load_air_traffic_data
 )
+from data_loader.brain_connectivity import load_brain_graphml
 from data_loader.migration import load_outflow_data
 from visualization import create_network_visualization
 
@@ -248,8 +249,16 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, network_size):
     
     # Load appropriate dataset
     if dataset == 'brain':
-        graph = generate_synthetic_brain_data(num_regions=network_size, connection_prob=0.1)
-        title = f"Brain Connectivity Network ({network_size} regions)"
+        # Try to load real brain data first, fallback to synthetic
+        real_brain_file = "data/brain_connectivity/996782_repeated10_scale60.graphml"
+        graph = load_brain_graphml(real_brain_file)
+        if graph:
+            title = f"Brain Connectivity Network (HCP Subject 996782, {graph.number_of_nodes()} regions)"
+        else:
+            # Fallback to synthetic if real data fails
+            graph = generate_synthetic_brain_data(num_regions=network_size, connection_prob=0.1)
+            title = f"Brain Connectivity Network (Synthetic, {network_size} regions)"
+            status_msg = "⚠ Real brain data failed, using synthetic"
     elif dataset == 'air_traffic':
         # Load real OpenFlights data (subset for performance)
         airports_file = "data/air_traffic/airports.dat"

@@ -29,7 +29,15 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
     Returns:
         Plotly Figure object
     """
-    # Get node positions
+    # Check if this is 3D brain data (has z coordinates)
+    has_3d_coords = _is_brain_3d_data(graph)
+    
+    if has_3d_coords:
+        # Create 3D visualization for brain data
+        fig = _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples)
+        return fig
+    
+    # Get node positions for 2D visualization
     node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
     
     # Auto-detect if we should use map (geographic coordinates)
@@ -60,6 +68,21 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         fig = _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
     
     return fig
+
+
+def _is_brain_3d_data(graph) -> bool:
+    """Check if graph has 3D coordinates (brain data)."""
+    if not graph.nodes():
+        return False
+    
+    # Check first few nodes for z coordinate
+    sample_nodes = list(graph.nodes())[:5]
+    for node in sample_nodes:
+        node_data = graph.nodes[node]
+        if 'z' in node_data and node_data['z'] is not None:
+            return True
+    
+    return False
 
 
 def _is_geographic_data(node_positions: Dict) -> bool:
@@ -560,6 +583,227 @@ def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool, node_pos
                 xref="paper", yref="paper",
                 x=0.005, y=-0.002, 
                 xanchor='left', yanchor='bottom',
+                font=dict(size=12, color='gray')
+            )
+        ]
+    )
+
+
+def _create_3d_visualization(graph, bundled_paths: List[Dict], title: str,
+                            use_curves: bool, smoothing_level: int, num_samples: int) -> go.Figure:
+    """Create interactive 3D visualization for brain data."""
+    fig = go.Figure()
+    
+    # Get 3D node positions
+    node_positions_3d = {node: (data['x'], data['y'], data['z']) for node, data in graph.nodes(data=True)}
+    
+    # Define colors
+    unbundled_color = 'lightgray'
+    bundled_color = 'red'
+    node_color = 'rgb(78, 110, 77)'  # Green from dashboard theme
+    
+    # Draw unbundled edges
+    _add_unbundled_edges_3d(fig, graph, node_positions_3d, unbundled_color)
+    
+    # Draw bundled paths
+    if use_curves:
+        _add_bundled_curves_3d(fig, bundled_paths, node_positions_3d, bundled_color, smoothing_level, num_samples)
+    else:
+        _add_bundled_segments_3d(fig, bundled_paths, node_positions_3d, bundled_color)
+    
+    # Draw nodes
+    _add_nodes_3d(fig, graph, node_positions_3d, node_color)
+    
+    # Configure 3D layout
+    _configure_3d_layout(fig, title, use_curves)
+    
+    return fig
+
+
+def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: str):
+    """Add unbundled edges as 3D lines."""
+    unbundled_edges = [(u, v) for u, v, data in graph.edges(data=True) 
+                      if not data.get('bundled', False)]
+    
+    # Limit edges for performance (brain data can be dense)
+    if len(unbundled_edges) > 1000:
+        import random
+        unbundled_edges = random.sample(unbundled_edges, 1000)
+    
+    for u, v in unbundled_edges:
+        if u in node_positions and v in node_positions:
+            x0, y0, z0 = node_positions[u]
+            x1, y1, z1 = node_positions[v]
+            
+            fig.add_trace(go.Scatter3d(
+                x=[x0, x1, None], 
+                y=[y0, y1, None],
+                z=[z0, z1, None],
+                mode='lines',
+                line=dict(color=color, width=2),
+                hoverinfo='none',
+                showlegend=False,
+                name='unbundled'
+            ))
+
+
+def _add_bundled_curves_3d(fig: go.Figure, bundled_paths: List[Dict], 
+                          node_positions: Dict, color: str,
+                          smoothing_level: int, num_samples: int):
+    """Add bundled paths as smooth 3D curves."""
+    for i, bundle in enumerate(bundled_paths):
+        path_nodes = bundle['path']
+        
+        # Generate smooth 3D curve
+        curve_points = _create_smooth_3d_path(path_nodes, node_positions, smoothing_level, num_samples)
+        
+        if curve_points:
+            x_coords = [point[0] for point in curve_points]
+            y_coords = [point[1] for point in curve_points]
+            z_coords = [point[2] for point in curve_points]
+            
+            # Create hover text
+            path_text = ' → '.join([str(node) for node in path_nodes])
+            detour_ratio = bundle.get('detour_ratio', 0)
+            hover_text = f"Bundled path: {path_text}<br>Detour ratio: {detour_ratio:.2f}"
+            
+            fig.add_trace(go.Scatter3d(
+                x=x_coords, 
+                y=y_coords,
+                z=z_coords,
+                mode='lines',
+                line=dict(color=color, width=4),
+                hoverinfo='text',
+                hovertext=hover_text,
+                showlegend=False,
+                name=f'bundle_{i}'
+            ))
+
+
+def _add_bundled_segments_3d(fig: go.Figure, bundled_paths: List[Dict], 
+                            node_positions: Dict, color: str):
+    """Add bundled paths as 3D line segments."""
+    for i, bundle in enumerate(bundled_paths):
+        path_nodes = bundle['path']
+        
+        # Get 3D coordinates for path nodes
+        if all(node in node_positions for node in path_nodes):
+            x_coords = [node_positions[node][0] for node in path_nodes]
+            y_coords = [node_positions[node][1] for node in path_nodes]
+            z_coords = [node_positions[node][2] for node in path_nodes]
+            
+            # Create hover text
+            path_text = ' → '.join([str(node) for node in path_nodes])
+            detour_ratio = bundle.get('detour_ratio', 0)
+            hover_text = f"Bundled path: {path_text}<br>Detour ratio: {detour_ratio:.2f}"
+            
+            fig.add_trace(go.Scatter3d(
+                x=x_coords, 
+                y=y_coords,
+                z=z_coords,
+                mode='lines',
+                line=dict(color=color, width=3),
+                hoverinfo='text',
+                hovertext=hover_text,
+                showlegend=False,
+                name=f'bundle_{i}'
+            ))
+
+
+def _add_nodes_3d(fig: go.Figure, graph, node_positions: Dict, color: str):
+    """Add nodes to 3D visualization."""
+    node_x = [node_positions[node][0] for node in graph.nodes() if node in node_positions]
+    node_y = [node_positions[node][1] for node in graph.nodes() if node in node_positions]
+    node_z = [node_positions[node][2] for node in graph.nodes() if node in node_positions]
+    node_text = [f"{node}: {data.get('name', f'Region_{node}')}" for node, data in graph.nodes(data=True) 
+                if node in node_positions]
+    
+    fig.add_trace(go.Scatter3d(
+        x=node_x, 
+        y=node_y,
+        z=node_z,
+        mode='markers',
+        marker=dict(size=6, color=color, opacity=0.8),
+        text=node_text,
+        hoverinfo='text',
+        showlegend=False,
+        name='brain_regions'
+    ))
+
+
+def _create_smooth_3d_path(path_nodes: List, node_positions: Dict, smoothing_level: int, num_samples: int) -> List[Tuple]:
+    """Create smooth 3D curve for bundled path using simple interpolation."""
+    if len(path_nodes) < 2:
+        return []
+    
+    # Get 3D coordinates for path nodes
+    path_coords = []
+    for node in path_nodes:
+        if node in node_positions:
+            path_coords.append(node_positions[node])
+    
+    if len(path_coords) < 2:
+        return []
+    
+    # Simple linear interpolation for 3D curves
+    curve_points = []
+    for i in range(len(path_coords) - 1):
+        x0, y0, z0 = path_coords[i]
+        x1, y1, z1 = path_coords[i + 1]
+        
+        # Linear interpolation between points
+        for t in np.linspace(0, 1, num_samples // (len(path_coords) - 1)):
+            x = x0 + t * (x1 - x0)
+            y = y0 + t * (y1 - y0)
+            z = z0 + t * (z1 - z0)
+            curve_points.append((x, y, z))
+    
+    return curve_points
+
+
+def _configure_3d_layout(fig: go.Figure, title: str, use_curves: bool):
+    """Configure 3D plot layout."""
+    curve_type = "Smooth curves" if use_curves else "Line segments"
+    
+    fig.update_layout(
+        title=f"{title} - Interactive 3D Brain Network",
+        showlegend=False,
+        hovermode='closest',
+        margin=dict(l=0, r=0, b=0, t=40),
+        scene=dict(
+            xaxis=dict(
+                title="X (mm)",
+                backgroundcolor="rgba(0,0,0,0)",
+                gridcolor="lightgray",
+                showbackground=True,
+                zerolinecolor="gray"
+            ),
+            yaxis=dict(
+                title="Y (mm)", 
+                backgroundcolor="rgba(0,0,0,0)",
+                gridcolor="lightgray",
+                showbackground=True,
+                zerolinecolor="gray"
+            ),
+            zaxis=dict(
+                title="Z (mm)",
+                backgroundcolor="rgba(0,0,0,0)",
+                gridcolor="lightgray", 
+                showbackground=True,
+                zerolinecolor="gray"
+            ),
+            camera=dict(
+                eye=dict(x=1.5, y=1.5, z=1.5)  # Initial viewing angle
+            ),
+            aspectmode='cube'  # Maintain proportions
+        ),
+        annotations=[
+            dict(
+                text=f"🧠 Use mouse to rotate, zoom, and pan | Red: bundled paths ({curve_type}), Gray: direct connections",
+                showarrow=False,
+                xref="paper", yref="paper",
+                x=0.5, y=0.02,
+                xanchor='center', yanchor='bottom',
                 font=dict(size=12, color='gray')
             )
         ]
