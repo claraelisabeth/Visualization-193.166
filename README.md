@@ -39,9 +39,33 @@ For the EPB we need a list of 3D coordinates for each node, edges as pairs of no
 As for the weight we chose `number_of_fibers`. It reflects the strength of the connection, and it’s positive, simple, and standard.
 
 
+
+## How to Run
+
+To run the dash application you can either use
+```
+python src/dashboard/app.py
+```
+or 
+```
+python run_dashboard.py
+```
+
+
+
 ## TODO
 
 - 
+
+
+
+
+
+
+
+
+
+
 
 
 ---
