@@ -150,6 +150,7 @@ data/*/*.csv
 data/*/*.json
 data/*/*.dat
 data/*/*.txt
+data/*/*.graphml
 data/*/maps/
 *.shp
 *.shx
