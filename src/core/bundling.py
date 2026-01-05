@@ -94,14 +94,15 @@ def sort_edges(graph: nx.DiGraph) -> List[Tuple]:
 
 def dijkstra_with_skip(graph: nx.DiGraph, source, target) -> Optional[List]:
     """Find shortest path from source to target, excluding edges where skip=True"""
-    # Create temporary graph without 'skip' edges
-    temp_graph = graph.copy()
-    edges_to_remove = [(u, v) for u, v, data in temp_graph.edges(data=True) 
-                       if data.get('skip', False)]
-    temp_graph.remove_edges_from(edges_to_remove)
+    # Use networkx dijkstra with custom weight function to avoid graph copying
+    def weight_func(u, v, edge_data):
+        # Return infinite weight for skipped edges (effectively excluding them)
+        if edge_data.get('skip', False):
+            return float('inf')
+        return edge_data.get('weight', 1.0)
     
     try:
-        return nx.dijkstra_path(temp_graph, source, target, weight='weight')
+        return nx.dijkstra_path(graph, source, target, weight=weight_func)
     except nx.NetworkXNoPath:
         return None
 
@@ -148,6 +149,7 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
         Dict with bundled paths and control points
     """
     bundled_paths = []
+    path_cache = {}  # Cache for computed paths to avoid recomputation
     
     # Adjust weights with current d parameter and reset state
     update_attributes(graph, d)
@@ -156,7 +158,10 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
     sorted_edges = sort_edges(graph)
     
     # Step 2: Algorithm 1 Lines 6-21 - Main loop
-    for source, target in sorted_edges:
+    for i, (source, target) in enumerate(sorted_edges):
+        # Progress indicator for large graphs
+        if i % 500 == 0 and i > 0:
+            print(f"Processing edge {i}/{len(sorted_edges)}...")
         # Line 7: if lock(e) then continue
         if graph.edges[source, target]['locked']:
             continue
