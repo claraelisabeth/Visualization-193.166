@@ -57,7 +57,6 @@ app.layout = html.Div([
 
     html.Div(className='overview-box', children=[
         html.Div(id='overview-text', children=[
-            html.H4("Edge Path Bundling Visualization"),
             html.P([
                 "This interactive dashboard demonstrates the edge path bundling algorithm ",
                 "on different network datasets. The algorithm reduces visual clutter by ",
@@ -109,9 +108,9 @@ app.layout = html.Div([
             dcc.Dropdown(
                 id='dataset-dropdown',
                 options=[
-                    {'label': '🧠 Brain (Synthetic)', 'value': 'brain'},
-                    {'label': '✈️ Air Traffic', 'value': 'air_traffic'},
-                    {'label': '🏘️ Migration', 'value': 'migration'}
+                    {'label': 'Brain', 'value': 'brain'},
+                    {'label': 'Air Traffic', 'value': 'air_traffic'},
+                    {'label': 'Migration', 'value': 'migration'}
                 ],
                 value='brain',
                 placeholder="Select Dataset",
@@ -157,22 +156,19 @@ app.layout = html.Div([
                    style={'font-size': '12px', 'color': light_brown, 'margin-top': '10px'})
         ], style={'padding': '0 20px', 'margin-top': '20px'}),
         
-        # Network Size Control (for synthetic data)
         html.Div([
-            html.Label("Network Size (nodes):", style={'color': brown, 'font-weight': 'bold'}),
-            html.Div(id='network-size-display', style={'color': green, 'font-size': '18px', 'margin': '5px 0'}),
-            html.Div([
-                dcc.Slider(
-                    id='network-size-slider',
-                    min=20,
-                    max=200,
-                    step=10,
-                    value=50,
-                    marks={i: str(i) for i in range(20, 201, 40)},
-                    tooltip={"placement": "bottom", "always_visible": True}
-                )
-            ])
-        ], id='network-size-control', style={'padding': '0 20px', 'margin-top': '20px'}),
+            html.Label("Distance:", style={'color': brown, 'font-weight': 'bold', 'margin-bottom': '5px'}),
+            dcc.Dropdown(
+                id='distance-dropdown',
+                options=[
+                    {'label': 'Eucledian', 'value': 'eucledian'},
+                    {'label': 'Haversine', 'value': 'haversine'}
+                ],
+                value='eucledian',
+                placeholder="Select Distance",
+                style={'margin-bottom': '20px'}
+            )
+        ], style={'padding': '0 20px'}),
     ]),
 ])
 
@@ -185,39 +181,20 @@ def update_bundling_factor_display(value):
     return f"k = {value:.1f}"
 
 @app.callback(
-    Output('network-size-display', 'children'),
-    Input('network-size-slider', 'value')
-)
-def update_network_size_display(value):
-    return f"{value} nodes"
-
-@app.callback(
     Output('edge-weight-display', 'children'),
     Input('edge-weight-slider', 'value')
 )
 def update_edge_weight_display(value):
     return f"d = {value:.1f}"
 
-@app.callback(
-    Output('network-size-control', 'style'),
-    Input('dataset-dropdown', 'value')
-)
-def toggle_network_size_control(dataset):
-    if dataset == 'brain':
-        return {'padding': '0 20px', 'margin-top': '20px', 'display': 'block'}
-    else:
-        return {'padding': '0 20px', 'margin-top': '20px', 'display': 'none'}
-
 # Immediate loading message callback (fires first)
 @app.callback(
     Output('loading-status', 'children'),
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
-     Input('edge-weight-slider', 'value'),
-     Input('network-size-slider', 'value')]
+     Input('edge-weight-slider', 'value')]
 )
-def show_loading_message(dataset, bundling_factor, edge_weight_factor, network_size):
-    """Show immediate loading message when parameters change."""
+def show_loading_message(dataset, bundling_factor, edge_weight_factor):
     dataset_names = {
         'brain': 'Brain Connectivity',
         'air_traffic': 'Air Traffic', 
@@ -225,17 +202,17 @@ def show_loading_message(dataset, bundling_factor, edge_weight_factor, network_s
     }
     
     dataset_name = dataset_names.get(dataset, 'Unknown')
-    return f"🔄 Loading {dataset_name} dataset and running bundling algorithm..."
+    return f"Loading {dataset_name} dataset and running bundling algorithm..."
 
 @app.callback(
     [Output('main-graph', 'figure'), Output('graph-stats', 'children'), Output('loading-status', 'children', allow_duplicate=True)],
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
      Input('edge-weight-slider', 'value'),
-     Input('network-size-slider', 'value')],
+     Input('distance-dropdown', 'value')],
     prevent_initial_call=True
 )
-def update_graph(dataset, bundling_factor, edge_weight_factor, network_size):
+def update_graph(dataset, bundling_factor, edge_weight_factor, distance):
     """Update the main graph based on selected parameters."""
     
     # Dataset-specific status messages
@@ -245,49 +222,32 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, network_size):
         'migration': 'Migration Flows'
     }
     
-    status_msg = f"✓ {dataset_names.get(dataset, 'Unknown')} dataset loaded and processed"
+    status_msg = f"{dataset_names.get(dataset, 'Unknown')} dataset loaded and processed"
     
     # Load appropriate dataset
     if dataset == 'brain':
         # Try to load real brain data first, fallback to synthetic
         real_brain_file = "data/brain_connectivity/996782_repeated10_scale60.graphml"
         graph = load_brain_graphml(real_brain_file)
-        if graph:
-            title = f"Brain Connectivity Network (HCP Subject 996782, {graph.number_of_nodes()} regions)"
-        else:
-            # Fallback to synthetic if real data fails
-            graph = generate_synthetic_brain_data(num_regions=network_size, connection_prob=0.1)
-            title = f"Brain Connectivity Network (Synthetic, {network_size} regions)"
-            status_msg = "⚠ Real brain data failed, using synthetic"
+        title = f"Brain Connectivity Network (HCP Subject 996782, {graph.number_of_nodes()} regions)"
+        
     elif dataset == 'air_traffic':
-        # Load real OpenFlights data (subset for performance)
+        # Load OpenFlights data (subset for performance)
         airports_file = "data/air_traffic/airports.dat"
         routes_file = "data/air_traffic/routes.dat"
         graph = _create_major_airports_subset(airports_file, routes_file)
-        if graph is None:
-            # Fallback to demo data if loading fails
-            graph = _create_air_traffic_demo()
-            title = "Air Traffic Network (Demo - file load failed)"
-            status_msg = "⚠ Air traffic data failed, using demo data"
-        else:
-            title = f"Air Traffic Network ({graph.number_of_nodes()} major airports)"
+        title = f"Air Traffic Network ({graph.number_of_nodes()} major airports)"
     else:  # migration
-        # Load real US migration data with performance optimization
+        # Load US migration data with performance optimization
         outflow_file = "data/migration/outflow.txt"
         graph = _create_migration_subset(outflow_file)
-        if graph is None:
-            # Fallback to demo data if loading fails
-            graph = _create_migration_demo()
-            title = "Migration Flows (Demo - file load failed)"
-            status_msg = "⚠ Migration data failed, using demo data"
-        else:
-            title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
+        title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
     
     # Run bundling algorithm with new Algorithm 1 implementation
     result = bundle_edges(graph, k=bundling_factor, d=edge_weight_factor)
     stats = result['statistics']
     
-    # Create visualization with smooth Bézier curves
+    # Create visualization with smooth Bezier curves
     # Let migration data use map visualization (auto-detect geographic coordinates)
     fig = create_network_visualization(graph, result['bundled_paths'], title, 
                                      use_curves=True, smoothing_level=2, num_samples=100)
@@ -329,62 +289,6 @@ def _create_major_airports_subset(airports_file, routes_file):
         return None
 
 
-def _create_air_traffic_demo():
-    """Create realistic air traffic network with hub structure."""
-    import random
-    import math
-    
-    # Create hub-and-spoke topology
-    hubs = ['NYC', 'LAX', 'CHI', 'DFW', 'ATL']
-    regional_airports = [f'REG{i:02d}' for i in range(15)]
-    
-    nodes = []
-    
-    # Position hubs in a circle
-    hub_positions = {}
-    for i, hub in enumerate(hubs):
-        angle = 2 * math.pi * i / len(hubs)
-        hub_positions[hub] = (math.cos(angle) * 3, math.sin(angle) * 3)
-        nodes.append({'id': hub, 'x': hub_positions[hub][0], 'y': hub_positions[hub][1], 'name': hub})
-    
-    # Position regional airports randomly around hubs
-    for i, airport in enumerate(regional_airports):
-        hub = random.choice(hubs)
-        hub_x, hub_y = hub_positions[hub]
-        x = hub_x + random.uniform(-1.5, 1.5)
-        y = hub_y + random.uniform(-1.5, 1.5)
-        nodes.append({'id': airport, 'x': x, 'y': y, 'name': airport})
-    
-    # Create edges
-    edges = []
-    
-    # Add hub-to-hub connections
-    for i, hub1 in enumerate(hubs):
-        for j, hub2 in enumerate(hubs):
-            if i != j:
-                edges.append((hub1, hub2))
-    
-    # Add regional-to-hub connections
-    for airport in regional_airports:
-        distances = []
-        airport_pos = None
-        for node in nodes:
-            if node['id'] == airport:
-                airport_pos = (node['x'], node['y'])
-                break
-        
-        for hub in hubs:
-            hub_pos = hub_positions[hub]
-            dist = math.sqrt((airport_pos[0] - hub_pos[0])**2 + (airport_pos[1] - hub_pos[1])**2)
-            distances.append((dist, hub))
-        
-        distances.sort()
-        for _, hub in distances[:2]:
-            edges.append((airport, hub))
-            edges.append((hub, airport))
-    
-    return create_graph(nodes, edges)
-
 
 def _create_migration_subset(outflow_file):
     """Create smaller subset of migration data for dashboard performance, excluding Alaska/Hawaii."""
@@ -424,64 +328,7 @@ def _create_migration_subset(outflow_file):
         return None
 
 
-def _create_migration_demo():
-    """Create migration network with regional population centers."""
-    import random
-    import math
-    
-    centers = ['CA', 'TX', 'FL', 'NY', 'IL', 'PA', 'OH', 'GA', 'NC', 'MI']
-    smaller_cities = [f'CITY{i:02d}' for i in range(12)]
-    
-    nodes = []
-    
-    # Position major centers
-    center_positions = {}
-    for i, center in enumerate(centers):
-        if i < 5:
-            angle = 2 * math.pi * i / 5
-            center_positions[center] = (math.cos(angle) * 2, math.sin(angle) * 2)
-        else:
-            angle = 2 * math.pi * (i-5) / 5
-            center_positions[center] = (math.cos(angle) * 4, math.sin(angle) * 4)
-        
-        nodes.append({'id': center, 'x': center_positions[center][0], 'y': center_positions[center][1], 'name': center})
-    
-    # Position smaller cities
-    for i, city in enumerate(smaller_cities):
-        x = random.uniform(-5, 5)
-        y = random.uniform(-5, 5)
-        nodes.append({'id': city, 'x': x, 'y': y, 'name': city})
-    
-    # Create edges
-    edges = []
-    
-    # Add major center connections
-    for i, center1 in enumerate(centers):
-        for j, center2 in enumerate(centers):
-            if i != j and random.random() < 0.4:
-                edges.append((center1, center2))
-    
-    # Connect smaller cities to centers
-    for city in smaller_cities:
-        city_pos = None
-        for node in nodes:
-            if node['id'] == city:
-                city_pos = (node['x'], node['y'])
-                break
-        
-        distances = []
-        for center in centers:
-            center_pos = center_positions[center]
-            dist = math.sqrt((city_pos[0] - center_pos[0])**2 + (city_pos[1] - center_pos[1])**2)
-            distances.append((dist, center))
-        
-        distances.sort()
-        for _, center in distances[:2]:
-            edges.append((city, center))
-            if random.random() < 0.6:
-                edges.append((center, city))
-    
-    return create_graph(nodes, edges)
+
 
 
 if __name__ == '__main__':
