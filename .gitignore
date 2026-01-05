@@ -158,7 +158,6 @@ data/*/maps/
 *.prj
 
 # Generated visualizations
-*.png
 *.pdf
 *.svg
 spherical_texture.png
