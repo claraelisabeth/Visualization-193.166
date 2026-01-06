@@ -96,7 +96,7 @@ def load_routes(routes_file: str, airports: Dict) -> List[Tuple[int, int]]:
         return []
 
 
-def load_air_traffic_data(airports_file: str, routes_file: str, distance: str) -> Optional[nx.DiGraph]:
+def load_air_traffic_data(airports_file: str, routes_file: str, distance: str = 'haversine') -> Optional[nx.DiGraph]:
     """Load complete air traffic dataset and create NetworkX graph"""
     # Load data
     airports = load_airports(airports_file)

@@ -153,42 +153,37 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
     # Adjust weights with current d parameter and reset state
     update_attributes(graph, d)
     
-    # Step 1: Algorithm 1 Line 5 - sortedEdges ← sortDescending(E, weight)
     sorted_edges = sort_edges(graph)
     
-    # Step 2: Algorithm 1 Lines 6-21 - Main loop
+    # Main loop
     for i, (source, target) in enumerate(sorted_edges):
-        # Line 7: if lock(e) then continue
+        # Progress indicator for large graphs
+        if i % 500 == 0 and i > 0:
+            print(f"Processing edge {i}/{len(sorted_edges)}...")
+       
         if graph.edges[source, target]['locked']:
             continue
             
-        # Line 8: skip(e) ← True
         graph.edges[source, target]['skip'] = True
         
-        # Line 9-10: s ← source(e), t ← target(e)
         s, t = source, target
         
-        # Line 11: p ← dijkstraAlgorithm(G, s, t, weight, skip)
         p = dijkstra_with_skip(graph, s, t)
         
-        # Lines 12-13: if p == null then skip(e) ← False, continue
         if p is None:
             graph.edges[source, target]['skip'] = False
             continue
         
-        # Lines 14-16: Calculate detour ratio and check maximum distortion
-        # detour ← length(p) / length(e)
+        # Calculate detour ratio and check maximum distortion
         path_length = calculate_path_length(graph, p)
         direct_length = graph.edges[source, target]['length']
         detour_ratio = path_length / direct_length
         
-        # if detour > k then skip(e) ← False, continue
         if detour_ratio > k:
             graph.edges[source, target]['skip'] = False
             continue
         
-        # Lines 17-21: Bundle successful - lock path edges and store result
-        # for each edge f in p do lock(f) ← True
+        # Bundle successful - lock path edges and store result
         for i in range(len(p) - 1):
             u, v = p[i], p[i + 1]
             if graph.has_edge(u, v):
@@ -209,6 +204,7 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
     
     return {
         'bundled_paths': bundled_paths,
+        'control_points': {},  # vertex coordinates for each bundled edge
         'statistics': {
             'total_edges': total_edges,
             'bundled': bundled_count,
