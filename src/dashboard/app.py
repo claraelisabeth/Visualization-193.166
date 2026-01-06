@@ -288,7 +288,7 @@ def update_graph(dataset, bundling_factor, edge_weight_factor):
 def _create_major_airports_subset(airports_file, routes_file):
     """Create subset of major airports from real data for better performance."""
     try:
-        graph = load_air_traffic_data(airports_file, routes_file)
+        graph = load_air_traffic_data(airports_file, routes_file, distance='haversine')
         if not graph:
             return None
             

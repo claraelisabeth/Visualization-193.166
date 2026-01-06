@@ -213,7 +213,6 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
     
     return {
         'bundled_paths': bundled_paths,
-        'control_points': {},  # vertex coordinates for each bundled edge
         'statistics': {
             'total_edges': total_edges,
             'bundled': bundled_count,
