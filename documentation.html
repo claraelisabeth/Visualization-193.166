@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Edge Path Bundling</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: rgb(241, 246, 247);
+      color: #2c2c2c;
+      line-height: 1.6;
+    }
+
+    header {
+      background: linear-gradient(135deg, rgb(73, 135, 194), rgb(16, 115, 160));
+      color: rgb(241, 246, 247);
+      padding: 4rem 1.5rem;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 3rem;
+      margin-bottom: 0.4rem;
+    }
+
+    header h2 {
+      font-weight: 400;
+      font-size: 1.4rem;
+      margin-bottom: 1.5rem;
+      opacity: 0.9;
+    }
+
+    header p {
+      font-size: 1rem;
+      opacity: 0.85;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+    }
+
+    section {
+      margin-bottom: 3rem;
+    }
+
+    h3 {
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 0.3rem;
+      margin-bottom: 1rem;
+    }
+
+    code {
+      background-color: #eee;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    pre {
+      background-color: #eee;
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.9rem;
+      color: #777;
+    }
+    .figure {
+        margin: 2rem 0;
+        text-align: center;
+    }
+
+    .figure img {
+        max-width: 100%;
+        width: 100%;
+        height: auto;
+        border-radius: 6px;
+    }
+
+    .figure caption,
+    .figure figcaption {
+        display: block;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: #666;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>Edge Path Bundling</h1>
+  <h2>An Interactive Dash Application</h2>
+  <p>
+    Clara Pichler and Paul Schmitt<br>
+    A Project for the Course 193.166 Visualization at the Technical University Vienna.
+  </p>
+</header>
+
+<main>
+
+<section>
+  <h3>Project Overview</h3>
+
+  <p>
+    Graph visualizations often suffer from <em>edge clutter</em>: when many edges are drawn between nodes,
+    the result quickly becomes visually overwhelming. Overlapping edges, crossings, and dense regions
+    make it difficult to understand the underlying structure of the graph.
+  </p>
+
+  <p>
+    A common solution to this problem is <em>edge bundling</em>. Instead of drawing each edge independently,
+    similar edges are grouped together into bundles, reducing clutter and improving readability.
+    However, many traditional edge bundling techniques introduce new problems.
+  </p>
+
+  <p>
+    Force-directed, geometry-based, and confluent bundling methods often distort edges in a way that
+    makes it unclear where individual connections start and end. This can lead to ambiguous crossings
+    and misleading visual interpretations.
+  </p>
+
+  <p>
+    The paper <em>“Edge-Path Bundling: A Less Ambiguous Edge Bundling Approach”</em> by Wallinger et al. (2021)
+    proposes a different idea. Instead of arbitrarily deforming edges, each edge is routed along a
+    weighted shortest path in an overlay graph. This keeps deviations small, preserves interpretability,
+    and still achieves effective bundling.
+  </p>
+</section>
+
+<section>
+  <h3>Our Contribution</h3>
+
+  <p>
+    In this project, we reimplemented the Edge-Path Bundling (EPB) algorithm in Python. This helped us 
+    fully understanding the algorithm. We also used the same (similar) two-dimensional datasets as the 
+    original paper to validate our implementation.
+  </p>
+
+  <p>
+    We then extended EPB to work with higher-dimensional data. 
+    In particular, we introduce a three-dimensional brain connectivity dataset derived from
+    human connectomes. Working in 3D posed new challenges and provided insight into how the
+    algorithm behaves beyond planar layouts. The original algorithm did not introduces big problems since the 
+    it does not refer to coordinates but only to graph nodes. Therefore, we had one 
+    algorithm for two and three dimensional datasets. However, different kind of visual clutter was created.
+    ###TODO
+  </p>
+
+  <p>
+    Depending on the dataset, we adapted the distance metric used by the algorithm.
+    For geospatial datasets, we rely on the haversine distance to account for the Earth’s curvature,
+    while Euclidean distance is used for the three-dimensional brain data.
+  </p>
+
+  <p>
+    Finally, we developed an interactive Dash application that allows users to explore EPB
+    visually. Users can select datasets and adjust key parameters such as the maximum distortion
+    threshold <code>k</code> and the edge weight factor <code>d</code> in real time, making it easy
+    to study the effect of different settings. Furthermore, we added a Bezier curve smoothing parameter which allows 
+    the user to control the bundling strength in the final drawing by inserting additional control 
+    points along the path.
+  </p>
+</section>
+
+<section>
+  <h3>Datasets</h3>
+
+  <h4>Air Traffic</h4>
+  <p>
+    The Air Traffic dataset contains global flight routes between airports.
+    It consists of 1,533 airports and 14,825 directed connections, forming one connected component.
+    The data is provided by the OpenFlights project and is visualized using the haversine distance.
+  </p>
+
+  <h4>Migration Flows</h4>
+  <p>
+    The Migration dataset represents migration flows between U.S. counties.
+    While the exact version used in the original paper is no longer available,
+    a comparable dataset from the U.S. Census Bureau is used instead.
+    Distances are again computed using the haversine formula.
+  </p>
+
+  <h4>Brain Connectivity</h4>
+  <p>
+    The brain connectivity dataset is based on MRI-derived connectomes from the Human Connectome Project.
+    Each node represents a brain region and edges correspond to structural connections.
+    We focus on a single Scale 2 connectome (approximately 80–100 regions) and use Euclidean distance
+    for all computations.
+  </p>
+</section>
+
+<section>
+  <h3>How to Run</h3>
+
+  <p>
+    All required libraries are listed in the <code>requirements.txt</code> file.
+    You can install them using:
+  </p>
+
+  <pre><code>pip install -r requirements.txt</code></pre>
+
+  <p>
+    To start the Dash application, run either:
+  </p>
+
+  <pre><code>python src/dashboard/app.py
+    # OR
+    python run_dashboard.py</code></pre>
+
+  <p>
+    Then open <code>http://127.0.0.1:8050/</code> in your browser.
+  </p>
+</section>
+
+<section>
+  <h3>User Manual</h3>
+
+  <p>
+    The screenshot below shows our Dash application. On the left side one can find the 
+    <em>Parameter Control</em>. The user can choose one of the three network datasets which 
+    where described in cite-section-datasets.
+  </p>
+
+  <div class="figure">
+    <img src="images/first_screenshot.png" alt="Dashboard Start Page">
+    </div>
+
+  <p>
+    The maximun distortion parameter <em>k</em> can be changed to a float (NOT only integer) between and including 1 and 5. Note that in the 
+    original paper Wallinger et. al. writes that a maximum distortion factor between 1.5 and 3 works well for most of their experiments whereas
+    a distortion factor of less than 1.5 resulted in very little edge bundling. This can be explored by the user with our application and with different datasets.
+    Also an edge weight factor <em>d</em> can be changed to the users liking, ranging again from 1 till 5. Values of 1, 2 and 3 work well 
+    but higher values penalise long edges from being included in shortest paths used for bundling.
+  </p>
+
+  <p>
+    Once the control points (edges that are not bundeled) are computed they are used to draw the network graph (seen on the right) each edge using 
+    a smooth Bezier curve. A smoothing parameter which controls the bundling strength in the final drawing can also be controlled by the user. 
+  </p>
+
+</section>
+
+<section>
+  <h3>Discussion & Future Work</h3>
+
+  <p>
+    The project demonstrates that Edge-Path Bundling can be applied to both 2D and 3D datasets
+    in an interactive setting. While the system is functional and flexible, rendering time
+    can become an issue for larger graphs.
+  </p>
+
+  <p>
+    Future work could focus on performance optimizations, GPU-based rendering,
+    or benchmarking EPB against other edge bundling techniques to better understand
+    its strengths and limitations.
+  </p>
+
+  <p>
+    In the worst case, EPB has a time complexity of
+    <code>O(|E|² log |V|)</code>, as Dijkstra’s algorithm may be executed for each edge.
+    In practice, the distortion threshold <code>k</code> significantly reduces runtime
+    by terminating path searches early.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  2026 Edge-Path Bundling TU Vienna
+</footer>
+
+</body>
+</html>
