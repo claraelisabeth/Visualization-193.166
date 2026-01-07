@@ -16,7 +16,6 @@ import numpy as np
 from pathlib import Path
 from ..core.bundling import bundle_edges, create_graph
 from ..data_loader import (
-    generate_synthetic_brain_data,
     load_migration_json,
     load_air_traffic_data
 )
@@ -37,7 +36,7 @@ HEADER_BG = '#34495e'
 DEFAULT_BUNDLING_FACTOR = 1.0  # k parameter - maximum detour ratio
 DEFAULT_EDGE_WEIGHT_FACTOR = 2.0  # d parameter - edge weight factor
 DEFAULT_SMOOTHING_LEVEL = 2  # Bézier smoothing level
-DEFAULT_DATASET = 'Brain (Synthetic)'
+DEFAULT_DATASET = 'brain'
 
 # Fixed visualization parameters (not user-adjustable)
 FIXED_NUM_SAMPLES = 80  # Good balance of smoothness vs performance
@@ -430,16 +429,14 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, 
     
     # Load appropriate dataset
     if dataset == 'brain':
-        # Try to load real brain data first, fallback to synthetic
+        # Load real brain data
         real_brain_file = "data/brain_connectivity/996782_repeated10_scale60.graphml"
         graph = load_brain_graphml(real_brain_file)
         if graph:
             title = f"Brain Connectivity Network (HCP Subject 996782, {graph.number_of_nodes()} regions)"
         else:
-            # Fallback to synthetic if real data fails
-            graph = generate_synthetic_brain_data(num_regions=50, connection_prob=0.1)
-            title = f"Brain Connectivity Network (Synthetic, 50 regions)"
-            status_msg = "⚠ Real brain data failed, using synthetic"
+            # Return error if brain data fails to load
+            return None, "❌ Brain data failed to load"
     elif dataset == 'air_traffic':
         # Load real OpenFlights data (subset for performance)
         airports_file = "data/air_traffic/airports.dat"
