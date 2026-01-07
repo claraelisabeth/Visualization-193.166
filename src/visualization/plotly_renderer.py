@@ -7,13 +7,14 @@ with support for smooth Bézier curves following the paper's approach.
 
 import plotly.graph_objects as go
 import numpy as np
+import random
 from typing import Dict, List, Tuple, Optional
 from .curves import create_smooth_bundled_path
 
 
 def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
                                 use_curves: bool = True, smoothing_level: int = 2,
-                                num_samples: int = 100, use_map: Optional[bool] = None) -> go.Figure:
+                                num_samples: int = 100, dataset_type: Optional[str] = None) -> go.Figure:
     """
     Create a Plotly network visualization with smooth bundled paths.
     
@@ -24,50 +25,63 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         use_curves: Whether to use smooth curves (True) or line segments (False)
         smoothing_level: Bézier smoothing level (paper default: 2)
         num_samples: Curve sampling points (paper default: 100)
-        use_map: Whether to use map background (auto-detect if None)
+        dataset_type: Type of dataset ('brain_3d', 'air_traffic', 'migration', or None for auto-detect)
         
     Returns:
         Plotly Figure object
     """
-    # Check if this is 3D brain data (has z coordinates)
-    has_3d_coords = _is_brain_3d_data(graph)
-    
-    if has_3d_coords:
+    # Use explicit dataset type if provided (much faster than auto-detection)
+    if dataset_type == 'brain_3d':
         # Create 3D visualization for brain data
-        fig = _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples)
-        return fig
+        return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples)
     
-    # Get node positions for 2D visualization
-    node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
-    
-    # Auto-detect if we should use map (geographic coordinates)
-    if use_map is None:
-        use_map = _is_geographic_data(node_positions)
-    
-    if use_map:
-        # Create map-based visualization
+    elif dataset_type in ['air_traffic', 'migration']:
+        # Create map-based visualization for geographic data
+        node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
         try:
-            fig = _create_map_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
+            return _create_map_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
         except Exception as e:
-            # Create error figure for geographic data when map fails
-            fig = go.Figure()
-            fig.add_annotation(
-                text=f"Map visualization failed: {str(e)}<br>Please install plotly with mapbox support",
-                xref="paper", yref="paper", x=0.5, y=0.5,
-                showarrow=False, font=dict(size=16, color="red"),
-                bgcolor="rgba(255,255,255,0.8)", bordercolor="red", borderwidth=2
-            )
-            fig.update_layout(
-                title=f"{title} - Map Error",
-                xaxis=dict(visible=False),
-                yaxis=dict(visible=False),
-                plot_bgcolor='white'
-            )
-    else:
-        # Create standard scatter plot visualization
-        fig = _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
+            # Fallback to scatter plot if map fails
+            return _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
     
-    return fig
+    # Fallback to auto-detection (for backward compatibility)
+    else:
+        # Check if this is 3D brain data (has z coordinates)
+        has_3d_coords = _is_brain_3d_data(graph)
+        
+        if has_3d_coords:
+            # Create 3D visualization for brain data
+            return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples)
+        
+        # Get node positions for 2D visualization
+        node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
+        
+        # Auto-detect if we should use map (geographic coordinates)
+        use_map = _is_geographic_data(node_positions)
+        
+        if use_map:
+            # Create map-based visualization
+            try:
+                return _create_map_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
+            except Exception as e:
+                # Create error figure for geographic data when map fails
+                fig = go.Figure()
+                fig.add_annotation(
+                    text=f"Map visualization failed: {str(e)}<br>Please install plotly with mapbox support",
+                    xref="paper", yref="paper", x=0.5, y=0.5,
+                    showarrow=False, font=dict(size=16, color="red"),
+                    bgcolor="rgba(255,255,255,0.8)", bordercolor="red", borderwidth=2
+                )
+                fig.update_layout(
+                    title=f"{title} - Map Error",
+                    xaxis=dict(visible=False),
+                    yaxis=dict(visible=False),
+                    plot_bgcolor='white'
+                )
+                return fig
+        else:
+            # Create standard scatter plot visualization
+            return _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
 
 
 def _is_brain_3d_data(graph) -> bool:
@@ -432,7 +446,6 @@ def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color:
     
     # Limit edges for performance
     if len(unbundled_edges) > 500:
-        import random
         unbundled_edges = random.sample(unbundled_edges, 500)
     
     for u, v in unbundled_edges:
@@ -627,7 +640,6 @@ def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: 
     
     # Limit edges for performance (brain data can be dense)
     if len(unbundled_edges) > 1000:
-        import random
         unbundled_edges = random.sample(unbundled_edges, 1000)
     
     for u, v in unbundled_edges:

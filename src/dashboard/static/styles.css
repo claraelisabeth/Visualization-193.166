@@ -52,7 +52,8 @@ body {
     top: 70px;
     left: 25px;
     width: 30vw;
-    height: 28vh;
+    height: 22vh;
+    background-color: rgb(250, 245, 235);
 }
 
 #overview-text { 
@@ -72,14 +73,51 @@ body {
 #change-parameters {
     position: absolute;
     border: 2px solid black;
-    top: calc(28vh + 80px);
+    top: calc(22vh + 80px);
     left: 25px;
     width: 30vw;
-    height: calc(100vh - 28vh - 90px);
+    height: calc(100vh - 22vh - 90px);
+    overflow-y: auto;
+    background-color: rgb(250, 245, 235);
 }
 
 #normal-text {
     padding : 20px;
+}
+
+/* Compact slider styling */
+.parameter-box .rc-slider {
+    margin: 8px 0 !important;
+}
+
+.parameter-box .rc-slider-rail {
+    background-color: rgb(213, 184, 149) !important;
+}
+
+.parameter-box .rc-slider-track {
+    background-color: rgb(78, 110, 77) !important;
+}
+
+.parameter-box .rc-slider-handle {
+    border-color: rgb(78, 110, 77) !important;
+    background-color: rgb(78, 110, 77) !important;
+}
+
+.parameter-box .rc-slider-mark-text {
+    font-size: 10px !important;
+    color: rgb(113, 80, 58) !important;
+}
+
+/* Section dividers */
+.parameter-section {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+}
+
+/* Dropdown styling improvements */
+.parameter-box .Select-control {
+    min-height: 35px !important;
+    font-size: 14px !important;
 }
 
 #style_dropdown, #climber_dropdown, #route_dropdown {

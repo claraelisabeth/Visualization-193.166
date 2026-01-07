@@ -13,6 +13,7 @@ import networkx as nx
 from typing import Dict, List, Tuple, Optional
 import logging
 import json
+from ..core.bundling import create_graph
 
 logger = logging.getLogger(__name__)
 
@@ -144,10 +145,6 @@ def load_migration_json(json_file: str) -> Optional[nx.DiGraph]:
             edges.append((link['source'], link['target']))
         
         # Create graph
-        import sys
-        from pathlib import Path
-        sys.path.append(str(Path(__file__).parent.parent))
-        from core.bundling import create_graph
         graph = create_graph(nodes, edges, distance_type='euclidean')
         
         logger.info(f"Loaded migration JSON: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
@@ -194,10 +191,6 @@ def load_outflow_data(outflow_file: str, min_flow_threshold: int = 100, distance
                 flows.append((origin, dest))
         
         # Create NetworkX graph
-        import sys
-        from pathlib import Path
-        sys.path.append(str(Path(__file__).parent.parent))
-        from core.bundling import create_graph
         
         # Convert counties dict to list format
         nodes = list(counties.values())
@@ -323,10 +316,6 @@ def load_migration_data(counties_file: str, flows_file: str,
         return None
     
     # Create NetworkX graph
-    import sys
-    from pathlib import Path
-    sys.path.append(str(Path(__file__).parent.parent))
-    from core.bundling import create_graph
     
     # Convert counties dict to list format
     nodes = list(counties.values())

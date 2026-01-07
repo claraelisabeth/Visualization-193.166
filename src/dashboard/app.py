@@ -13,19 +13,16 @@ import pandas as pd
 import numpy as np
 
 # Import our bundling implementation
-import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
-
-from core.bundling import bundle_edges, create_graph
-from data_loader import (
+from ..core.bundling import bundle_edges, create_graph
+from ..data_loader import (
     generate_synthetic_brain_data,
     load_migration_json,
     load_air_traffic_data
 )
-from data_loader.brain_connectivity import load_brain_graphml
-from data_loader.migration import load_outflow_data
-from visualization import create_network_visualization
+from ..data_loader.brain_connectivity import load_brain_graphml
+from ..data_loader.migration import load_outflow_data
+from ..visualization import create_network_visualization
 
 # UI Colors
 even_lighter_beige = 'rgb(247, 242, 233)'
@@ -39,7 +36,11 @@ green = 'rgb(78, 110, 77)'
 # Default parameters
 DEFAULT_BUNDLING_FACTOR = 1.0  # k parameter - maximum detour ratio
 DEFAULT_EDGE_WEIGHT_FACTOR = 1.0  # d parameter - edge weight factor
+DEFAULT_SMOOTHING_LEVEL = 2  # Bézier smoothing level
 DEFAULT_DATASET = 'Brain (Synthetic)'
+
+# Fixed visualization parameters (not user-adjustable)
+FIXED_NUM_SAMPLES = 80  # Good balance of smoothness vs performance
 
 # Initialize the app with assets folderI
 assets_path = Path(__file__).parent / 'static'
@@ -57,17 +58,14 @@ app.layout = html.Div([
 
     html.Div(className='overview-box', children=[
         html.Div(id='overview-text', children=[
-            html.H4("Edge Path Bundling Visualization"),
+            html.H4("Edge Path Bundling Visualization", style={'margin-bottom': '10px'}),
             html.P([
-                "This interactive dashboard demonstrates the edge path bundling algorithm ",
-                "on different network datasets. The algorithm reduces visual clutter by ",
-                "bundling edges that can be routed through existing paths in the network."
-            ]),
+                "Interactive dashboard for the edge path bundling algorithm. ",
+                "Reduces visual clutter by bundling edges through existing network paths."
+            ], style={'margin-bottom': '8px', 'font-size': '14px'}),
             html.P([
-                "Select a dataset and adjust the bundling factor to see how it affects ",
-                "the number of bundled edges. A lower bundling factor creates more bundles ",
-                "but allows longer detours."
-            ])
+                "Adjust parameters to see their effect on bundling behavior and visualization quality."
+            ], style={'margin-bottom': '0px', 'font-size': '14px'})
         ])
     ]),
 
@@ -101,7 +99,7 @@ app.layout = html.Div([
 
     html.Div(id='change-parameters', className='parameter-box', children=[
         html.Div(children="Parameter Control", 
-                 style={'color': green, 'font-size': '25px', 'padding':'20px'}),
+                 style={'color': green, 'font-size': '22px', 'padding':'15px', 'text-align': 'center'}),
         
         # Dataset Selection
         html.Div([
@@ -116,15 +114,18 @@ app.layout = html.Div([
                 value='migration',
                 placeholder="Select Dataset",
                 clearable=False,
-                style={'margin-bottom': '20px'}
+                style={'margin-bottom': '15px'}
             )
-        ], style={'padding': '0 20px'}),
+        ], style={'padding': '0 15px'}),
         
-        # Bundling Factor Control (k parameter)
+        # Bundling Algorithm Section
         html.Div([
-            html.Label("Maximum Detour Ratio (k):", style={'color': brown, 'font-weight': 'bold'}),
-            html.Div(id='bundling-factor-display', style={'color': green, 'font-size': '18px', 'margin': '5px 0'}),
+            html.H5("🔗 Bundling Algorithm", style={'color': green, 'margin': '10px 0 15px 0', 'font-size': '16px'}),
+            
+            # Bundling Factor Control (k parameter)
             html.Div([
+                html.Label("Maximum Detour Ratio (k):", style={'color': brown, 'font-weight': 'bold', 'font-size': '14px'}),
+                html.Div(id='bundling-factor-display', style={'color': green, 'font-size': '16px', 'margin': '3px 0'}),
                 dcc.Slider(
                     id='bundling-factor-slider',
                     min=1.0,
@@ -133,17 +134,15 @@ app.layout = html.Div([
                     value=DEFAULT_BUNDLING_FACTOR,
                     marks={i: str(i) for i in range(1, 6)},
                     tooltip={"placement": "bottom", "always_visible": True}
-                )
+                ),
+                html.P("Lower = less bundling, higher = more bundling", 
+                       style={'font-size': '11px', 'color': light_brown, 'margin': '5px 0 15px 0'})
             ]),
-            html.P("Lower values = less bundling, higher values = more bundling", 
-                   style={'font-size': '12px', 'color': light_brown, 'margin-top': '10px'})
-        ], style={'padding': '0 20px'}),
-        
-        # Edge Weight Factor Control (d parameter)
-        html.Div([
-            html.Label("Edge Weight Factor (d):", style={'color': brown, 'font-weight': 'bold'}),
-            html.Div(id='edge-weight-display', style={'color': green, 'font-size': '18px', 'margin': '5px 0'}),
+            
+            # Edge Weight Factor Control (d parameter)
             html.Div([
+                html.Label("Edge Weight Factor (d):", style={'color': brown, 'font-weight': 'bold', 'font-size': '14px'}),
+                html.Div(id='edge-weight-display', style={'color': green, 'font-size': '16px', 'margin': '3px 0'}),
                 dcc.Slider(
                     id='edge-weight-slider',
                     min=1.0,
@@ -152,11 +151,34 @@ app.layout = html.Div([
                     value=DEFAULT_EDGE_WEIGHT_FACTOR,
                     marks={i: str(i) for i in range(1, 6)},
                     tooltip={"placement": "bottom", "always_visible": True}
-                )
+                ),
+                html.P("Lower = favor short edges, higher = favor long edges", 
+                       style={'font-size': '11px', 'color': light_brown, 'margin': '5px 0 0 0'})
+            ])
+        ], style={'padding': '0 15px', 'margin-bottom': '15px', 'border-bottom': f'1px solid {light_brown}'}),
+        
+        # Visualization Section
+        html.Div([
+            html.H5("🎨 Visualization", style={'color': green, 'margin': '15px 0 15px 0', 'font-size': '16px'}),
+            
+            # Bézier Smoothing Level Control
+            html.Div([
+                html.Label("Smoothing Level:", style={'color': brown, 'font-weight': 'bold', 'font-size': '14px'}),
+                html.Div(id='smoothing-level-display', style={'color': green, 'font-size': '16px', 'margin': '3px 0'}),
+                dcc.Slider(
+                    id='smoothing-level-slider',
+                    min=1,
+                    max=4,
+                    step=1,
+                    value=DEFAULT_SMOOTHING_LEVEL,
+                    marks={i: str(i) for i in range(1, 5)},
+                    tooltip={"placement": "bottom", "always_visible": True}
+                ),
+                html.P("Higher = smoother curves, more computation", 
+                       style={'font-size': '11px', 'color': light_brown, 'margin': '5px 0 15px 0'})
             ]),
-            html.P("Lower values = favor shorter edges (more bundling), higher values = favor longer edges (less bundling)", 
-                   style={'font-size': '12px', 'color': light_brown, 'margin-top': '10px'})
-        ], style={'padding': '0 20px', 'margin-top': '20px'}),
+            
+        ], style={'padding': '0 15px'}),
         
     ]),
 ])
@@ -176,23 +198,33 @@ def update_bundling_factor_display(value):
 def update_edge_weight_display(value):
     return f"d = {value:.1f}"
 
+@app.callback(
+    Output('smoothing-level-display', 'children'),
+    Input('smoothing-level-slider', 'value')
+)
+def update_smoothing_level_display(value):
+    return f"Level = {value}"
+
+
 # Reset sliders to default when dataset changes
 @app.callback(
     [Output('bundling-factor-slider', 'value'),
-     Output('edge-weight-slider', 'value')],
+     Output('edge-weight-slider', 'value'),
+     Output('smoothing-level-slider', 'value')],
     Input('dataset-dropdown', 'value')
 )
 def reset_sliders_on_dataset_change(dataset):
-    return DEFAULT_BUNDLING_FACTOR, DEFAULT_EDGE_WEIGHT_FACTOR
+    return DEFAULT_BUNDLING_FACTOR, DEFAULT_EDGE_WEIGHT_FACTOR, DEFAULT_SMOOTHING_LEVEL
 
 # Immediate loading message callback (fires first)
 @app.callback(
     Output('loading-status', 'children'),
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
-     Input('edge-weight-slider', 'value')]
+     Input('edge-weight-slider', 'value'),
+     Input('smoothing-level-slider', 'value')]
 )
-def show_loading_message(dataset, bundling_factor, edge_weight_factor):
+def show_loading_message(dataset, bundling_factor, edge_weight_factor, smoothing_level):
     """Show immediate loading message when parameters change."""
     dataset_names = {
         'brain': 'Brain Connectivity',
@@ -207,10 +239,11 @@ def show_loading_message(dataset, bundling_factor, edge_weight_factor):
     [Output('main-graph', 'figure'), Output('graph-stats', 'children'), Output('loading-status', 'children', allow_duplicate=True)],
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
-     Input('edge-weight-slider', 'value')],
+     Input('edge-weight-slider', 'value'),
+     Input('smoothing-level-slider', 'value')],
     prevent_initial_call='initial_duplicate'
 )
-def update_graph(dataset, bundling_factor, edge_weight_factor):
+def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level):
     """Update the main graph based on selected parameters."""
     
     # Handle None values (initial load)
@@ -220,6 +253,8 @@ def update_graph(dataset, bundling_factor, edge_weight_factor):
         bundling_factor = DEFAULT_BUNDLING_FACTOR
     if edge_weight_factor is None:
         edge_weight_factor = DEFAULT_EDGE_WEIGHT_FACTOR
+    if smoothing_level is None:
+        smoothing_level = DEFAULT_SMOOTHING_LEVEL
     
     # Dataset-specific status messages
     dataset_names = {
@@ -266,14 +301,36 @@ def update_graph(dataset, bundling_factor, edge_weight_factor):
         else:
             title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
     
-    # Run bundling algorithm with new Algorithm 1 implementation
-    result = bundle_edges(graph, k=bundling_factor, d=edge_weight_factor)
+    # Special case: k=1, d=1 means "no bundling" for better user experience
+    if bundling_factor == 1.0 and edge_weight_factor == 1.0:
+        # Return empty bundling result to show original network
+        result = {
+            'bundled_paths': [],
+            'statistics': {
+                'total_edges': graph.number_of_edges(),
+                'bundled': 0,
+            }
+        }
+    else:
+        # Run bundling algorithm with Algorithm 1 implementation
+        result = bundle_edges(graph, k=bundling_factor, d=edge_weight_factor)
+    
     stats = result['statistics']
     
     # Create visualization with smooth Bézier curves
-    # Let migration data use map visualization (auto-detect geographic coordinates)
+    # Use explicit dataset type for faster rendering
+    if dataset == 'brain':
+        dataset_type = 'brain_3d'
+    elif dataset == 'air_traffic':
+        dataset_type = 'air_traffic'
+    elif dataset == 'migration':
+        dataset_type = 'migration'
+    else:
+        dataset_type = None  # Fallback to auto-detection
+    
     fig = create_network_visualization(graph, result['bundled_paths'], title, 
-                                     use_curves=True, smoothing_level=2, num_samples=100)
+                                     use_curves=True, smoothing_level=smoothing_level, num_samples=FIXED_NUM_SAMPLES,
+                                     dataset_type=dataset_type)
     
     # Create stats text
     stats_text = (f"Total edges: {stats['total_edges']} | "

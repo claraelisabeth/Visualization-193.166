@@ -16,11 +16,8 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 import logging
 from pathlib import Path
-import sys
-
 # Import create_graph at module level
-sys.path.append(str(Path(__file__).parent.parent))
-from core.bundling import create_graph
+from ..core.bundling import create_graph
 
 logger = logging.getLogger(__name__)
 
