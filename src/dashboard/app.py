@@ -8,7 +8,7 @@ Supports 2D visualization with parameter controls for bundling factor and datase
 from dash import Dash, html, dcc, Output, Input
 
 from pathlib import Path
-from ..core.bundling import bundle_edges, create_graph
+from ..core.bundling import bundle_edges
 from ..data_loader import (
     load_air_traffic_data
 )
@@ -33,6 +33,30 @@ DEFAULT_DATASET = 'brain'
 
 # Fixed visualization parameters (not user-adjustable)
 FIXED_NUM_SAMPLES = 80  # Good balance of smoothness vs performance
+
+# Performance constants
+MAJOR_AIRPORTS_LIMIT = 50  # Top N airports for performance
+MAJOR_COUNTIES_LIMIT = 100  # Top N counties for performance
+MIN_MIGRATION_FLOW = 3000  # Minimum flow threshold
+
+# Dataset configuration
+DATASET_NAMES = {
+    'brain': 'Brain Connectivity',
+    'air_traffic': 'Air Traffic', 
+    'migration': 'Migration Flows'
+}
+
+DATASET_FILES = {
+    'brain': "data/brain_connectivity/996782_repeated10_scale60.graphml",
+    'air_traffic': {
+        'airports': "data/air_traffic/airports.dat",
+        'routes': "data/air_traffic/routes.dat"
+    },
+    'migration': "data/migration/outflow.txt"
+}
+
+# Global cache for loaded datasets (performance optimization)
+_dataset_cache = {}
 
 # Initialize the app with assets folderI
 assets_path = Path(__file__).parent / 'static'
@@ -380,14 +404,67 @@ def reset_sliders_on_dataset_change(dataset):
 )
 def show_loading_message(dataset, bundling_factor, edge_weight_factor, smoothing_level):
     """Show immediate loading message when parameters change."""
-    dataset_names = {
-        'brain': 'Brain Connectivity',
-        'air_traffic': 'Air Traffic', 
-        'migration': 'Migration Flows'
-    }
-    
-    dataset_name = dataset_names.get(dataset, 'Unknown')
+    dataset_name = DATASET_NAMES.get(dataset, 'Unknown')
     return f"🔄 Loading {dataset_name} dataset and running bundling algorithm..."
+
+def _get_cached_dataset(dataset_key):
+    """Get dataset from cache or load and cache it for performance."""
+    if dataset_key not in _dataset_cache:
+        if dataset_key == 'brain':
+            _dataset_cache[dataset_key] = load_brain_graphml(DATASET_FILES['brain'])
+        elif dataset_key == 'air_traffic':
+            files = DATASET_FILES['air_traffic']
+            _dataset_cache[dataset_key] = _create_major_airports_subset(files['airports'], files['routes'])
+        elif dataset_key == 'migration':
+            _dataset_cache[dataset_key] = _create_migration_subset(DATASET_FILES['migration'])
+    
+    return _dataset_cache[dataset_key]
+
+
+def _load_dataset(dataset):
+    """Load dataset from cache or files."""
+    graph = _get_cached_dataset(dataset)
+    
+    if graph is None:
+        return None, f"Failed to load {DATASET_NAMES.get(dataset, 'Unknown')} data", "Error loading dataset"
+    
+    # Create title from real data
+    if dataset == 'brain':
+        title = f"Brain Connectivity Network (HCP Subject 996782, {graph.number_of_nodes()} regions)"
+    elif dataset == 'air_traffic':
+        title = f"Air Traffic Network ({graph.number_of_nodes()} major airports)"
+    else:  # migration
+        title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
+    
+    status = f"✓ {DATASET_NAMES.get(dataset, 'Unknown')} dataset loaded and processed"
+    return graph, title, status
+
+
+def _run_bundling(graph, bundling_factor, edge_weight_factor):
+    """Run bundling algorithm or return empty result for k=1."""
+    if bundling_factor == 1.0:
+        # No bundling for k=1 - better UX
+        return {
+            'bundled_paths': [],
+            'statistics': {
+                'total_edges': graph.number_of_edges(),
+                'bundled': 0,
+            }
+        }
+    else:
+        return bundle_edges(graph, k=bundling_factor, d=edge_weight_factor)
+
+
+def _get_dataset_type(dataset):
+    """Get explicit dataset type for faster rendering."""
+    if dataset == 'brain':
+        return 'brain_3d'
+    elif dataset == 'air_traffic':
+        return 'air_traffic'
+    elif dataset == 'migration':
+        return 'migration'
+    return None
+
 
 @app.callback(
     [Output('main-graph', 'figure'), Output('viz-title', 'children'), Output('graph-stats', 'children'), Output('loading-status', 'children', allow_duplicate=True)],
@@ -402,93 +479,38 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, 
     """Update the main graph based on selected parameters."""
     
     # Handle None values (initial load)
-    if dataset is None:
-        dataset = 'migration'
-    if bundling_factor is None:
-        bundling_factor = DEFAULT_BUNDLING_FACTOR
-    if edge_weight_factor is None:
-        edge_weight_factor = DEFAULT_EDGE_WEIGHT_FACTOR
-    if smoothing_level is None:
-        smoothing_level = DEFAULT_SMOOTHING_LEVEL
+    dataset = dataset or 'migration'
+    bundling_factor = bundling_factor or DEFAULT_BUNDLING_FACTOR
+    edge_weight_factor = edge_weight_factor or DEFAULT_EDGE_WEIGHT_FACTOR
+    smoothing_level = smoothing_level or DEFAULT_SMOOTHING_LEVEL
     
-    # Dataset-specific status messages
-    dataset_names = {
-        'brain': 'Brain Connectivity',
-        'air_traffic': 'Air Traffic', 
-        'migration': 'Migration Flows'
-    }
+    # Load dataset (with caching for performance)
+    graph, title, status_msg = _load_dataset(dataset)
     
-    status_msg = f"✓ {dataset_names.get(dataset, 'Unknown')} dataset loaded and processed"
+    if graph is None:
+        return {}, "Error loading data", "", "Error loading dataset"
     
-    # Load appropriate dataset
-    if dataset == 'brain':
-        # Load real brain data
-        real_brain_file = "data/brain_connectivity/996782_repeated10_scale60.graphml"
-        graph = load_brain_graphml(real_brain_file)
-        if graph:
-            title = f"Brain Connectivity Network (HCP Subject 996782, {graph.number_of_nodes()} regions)"
-        else:
-            # Return error if brain data fails to load
-            return None, "Brain data failed to load"
-    elif dataset == 'air_traffic':
-        # Load real OpenFlights data (subset for performance)
-        airports_file = "data/air_traffic/airports.dat"
-        routes_file = "data/air_traffic/routes.dat"
-        graph = _create_major_airports_subset(airports_file, routes_file)
-        if graph is None:
-            # Fallback to demo data if loading fails
-            graph = _create_air_traffic_demo()
-            title = "Air Traffic Network (Demo - file load failed)"
-            status_msg = "Air traffic data failed, using demo data"
-        else:
-            title = f"Air Traffic Network ({graph.number_of_nodes()} major airports)"
-    else:  # migration
-        # Load real US migration data with performance optimization
-        outflow_file = "data/migration/outflow.txt"
-        graph = _create_migration_subset(outflow_file)
-        if graph is None:
-            # Fallback to demo data if loading fails
-            graph = _create_migration_demo()
-            title = "Migration Flows (Demo - file load failed)"
-            status_msg = "Migration data failed, using demo data"
-        else:
-            title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
-    
-    # Special case: k=1 means "no bundling" for better user experience
-    if bundling_factor == 1.0:
-        # Return empty bundling result to show original network
-        result = {
-            'bundled_paths': [],
-            'statistics': {
-                'total_edges': graph.number_of_edges(),
-                'bundled': 0,
-            }
-        }
-    else:
-        # Run bundling algorithm with Algorithm 1 implementation
-        result = bundle_edges(graph, k=bundling_factor, d=edge_weight_factor)
-    
+    # Run bundling algorithm
+    result = _run_bundling(graph, bundling_factor, edge_weight_factor)
     stats = result['statistics']
     
-    # Create visualization with smooth Bézier curves
-    # Use explicit dataset type for faster rendering
-    if dataset == 'brain':
-        dataset_type = 'brain_3d'
-    elif dataset == 'air_traffic':
-        dataset_type = 'air_traffic'
-    elif dataset == 'migration':
-        dataset_type = 'migration'
-    else:
-        dataset_type = None  # Fallback to auto-detection
-    
-    fig = create_network_visualization(graph, result['bundled_paths'], "", 
-                                     use_curves=True, smoothing_level=smoothing_level, num_samples=FIXED_NUM_SAMPLES,
-                                     dataset_type=dataset_type, edge_color_mode=edge_color)
+    # Create visualization
+    dataset_type = _get_dataset_type(dataset)
+    fig = create_network_visualization(
+        graph, result['bundled_paths'], "", 
+        use_curves=True, 
+        smoothing_level=smoothing_level, 
+        num_samples=FIXED_NUM_SAMPLES,
+        dataset_type=dataset_type, 
+        edge_color_mode=edge_color
+    )
     
     # Create stats text
-    stats_text = (f"Total edges: {stats['total_edges']} | "
-                  f"Bundled: {stats['bundled']} | "
-                  f"Bundling ratio: {(stats['bundled']/stats['total_edges']*100):.1f}%")
+    stats_text = (
+        f"Total edges: {stats['total_edges']} | "
+        f"Bundled: {stats['bundled']} | "
+        f"Bundling ratio: {(stats['bundled']/stats['total_edges']*100):.1f}%"
+    )
     
     return fig, title, stats_text, status_msg
 
@@ -505,12 +527,12 @@ def _create_major_airports_subset(airports_file, routes_file):
         # Get airports with most connections (major hubs)
         airport_degrees = []
         for node in graph.nodes():
-            degree = graph.in_degree(node) + graph.out_degree(node)
+            degree = graph.degree(node)
             airport_degrees.append((degree, node))
         
         # Sort by degree and take top airports for bundling demonstration
         airport_degrees.sort(reverse=True)
-        major_airports = [node for _, node in airport_degrees[:50]]  # Top 50 busiest airports for map performance
+        major_airports = [node for _, node in airport_degrees[:MAJOR_AIRPORTS_LIMIT]]
         
         # Create subgraph with only major airports and their connections
         subgraph = graph.subgraph(major_airports).copy()
@@ -522,68 +544,13 @@ def _create_major_airports_subset(airports_file, routes_file):
         return None
 
 
-def _create_air_traffic_demo():
-    """Create realistic air traffic network with hub structure."""
-    import random
-    import math
-    
-    # Create hub-and-spoke topology
-    hubs = ['NYC', 'LAX', 'CHI', 'DFW', 'ATL']
-    regional_airports = [f'REG{i:02d}' for i in range(15)]
-    
-    nodes = []
-    
-    # Position hubs in a circle
-    hub_positions = {}
-    for i, hub in enumerate(hubs):
-        angle = 2 * math.pi * i / len(hubs)
-        hub_positions[hub] = (math.cos(angle) * 3, math.sin(angle) * 3)
-        nodes.append({'id': hub, 'x': hub_positions[hub][0], 'y': hub_positions[hub][1], 'name': hub})
-    
-    # Position regional airports randomly around hubs
-    for i, airport in enumerate(regional_airports):
-        hub = random.choice(hubs)
-        hub_x, hub_y = hub_positions[hub]
-        x = hub_x + random.uniform(-1.5, 1.5)
-        y = hub_y + random.uniform(-1.5, 1.5)
-        nodes.append({'id': airport, 'x': x, 'y': y, 'name': airport})
-    
-    # Create edges
-    edges = []
-    
-    # Add hub-to-hub connections
-    for i, hub1 in enumerate(hubs):
-        for j, hub2 in enumerate(hubs):
-            if i != j:
-                edges.append((hub1, hub2))
-    
-    # Add regional-to-hub connections
-    for airport in regional_airports:
-        distances = []
-        airport_pos = None
-        for node in nodes:
-            if node['id'] == airport:
-                airport_pos = (node['x'], node['y'])
-                break
-        
-        for hub in hubs:
-            hub_pos = hub_positions[hub]
-            dist = math.sqrt((airport_pos[0] - hub_pos[0])**2 + (airport_pos[1] - hub_pos[1])**2)
-            distances.append((dist, hub))
-        
-        distances.sort()
-        for _, hub in distances[:2]:
-            edges.append((airport, hub))
-            edges.append((hub, airport))
-    
-    return create_graph(nodes, edges)
 
 
 def _create_migration_subset(outflow_file):
     """Create smaller subset of migration data for dashboard performance, excluding Alaska/Hawaii."""
     try:
         # Load with high threshold for only major flows
-        full_graph = load_outflow_data(outflow_file, min_flow_threshold=3000)
+        full_graph = load_outflow_data(outflow_file, min_flow_threshold=MIN_MIGRATION_FLOW)
         if not full_graph:
             return None
             
@@ -600,12 +567,12 @@ def _create_migration_subset(outflow_file):
         # Get counties with most connections within continental US
         county_degrees = []
         for node in continental_graph.nodes():
-            degree = continental_graph.in_degree(node) + continental_graph.out_degree(node)
+            degree = continental_graph.degree(node)
             county_degrees.append((degree, node))
         
         # Sort by degree and take top counties for performance
         county_degrees.sort(reverse=True)
-        major_counties = [node for _, node in county_degrees[:100]]  # Top 100 most connected counties for performance
+        major_counties = [node for _, node in county_degrees[:MAJOR_COUNTIES_LIMIT]]
         
         # Create final subgraph with only major continental counties
         subgraph = continental_graph.subgraph(major_counties).copy()
@@ -617,64 +584,6 @@ def _create_migration_subset(outflow_file):
         return None
 
 
-def _create_migration_demo():
-    """Create migration network with regional population centers."""
-    import random
-    import math
-    
-    centers = ['CA', 'TX', 'FL', 'NY', 'IL', 'PA', 'OH', 'GA', 'NC', 'MI']
-    smaller_cities = [f'CITY{i:02d}' for i in range(12)]
-    
-    nodes = []
-    
-    # Position major centers
-    center_positions = {}
-    for i, center in enumerate(centers):
-        if i < 5:
-            angle = 2 * math.pi * i / 5
-            center_positions[center] = (math.cos(angle) * 2, math.sin(angle) * 2)
-        else:
-            angle = 2 * math.pi * (i-5) / 5
-            center_positions[center] = (math.cos(angle) * 4, math.sin(angle) * 4)
-        
-        nodes.append({'id': center, 'x': center_positions[center][0], 'y': center_positions[center][1], 'name': center})
-    
-    # Position smaller cities
-    for i, city in enumerate(smaller_cities):
-        x = random.uniform(-5, 5)
-        y = random.uniform(-5, 5)
-        nodes.append({'id': city, 'x': x, 'y': y, 'name': city})
-    
-    # Create edges
-    edges = []
-    
-    # Add major center connections
-    for i, center1 in enumerate(centers):
-        for j, center2 in enumerate(centers):
-            if i != j and random.random() < 0.4:
-                edges.append((center1, center2))
-    
-    # Connect smaller cities to centers
-    for city in smaller_cities:
-        city_pos = None
-        for node in nodes:
-            if node['id'] == city:
-                city_pos = (node['x'], node['y'])
-                break
-        
-        distances = []
-        for center in centers:
-            center_pos = center_positions[center]
-            dist = math.sqrt((city_pos[0] - center_pos[0])**2 + (city_pos[1] - center_pos[1])**2)
-            distances.append((dist, center))
-        
-        distances.sort()
-        for _, center in distances[:2]:
-            edges.append((city, center))
-            if random.random() < 0.6:
-                edges.append((center, city))
-    
-    return create_graph(nodes, edges)
 
 
 if __name__ == '__main__':

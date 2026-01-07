@@ -10,13 +10,18 @@ import networkx as nx
 from typing import Dict, List, Tuple, Optional
 import math
 
+# Constants
+EARTH_RADIUS_KM = 6371.0
+DISTANCE_EUCLIDEAN = 'euclidean'
+DISTANCE_HAVERSINE = 'haversine'
+
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculate great circle distance between two points on Earth.
     This is needed for the geospacial datasets.
     """
-    R = 6371.0  # Earth radius in kilometers
+    R = EARTH_RADIUS_KM
     
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
@@ -36,7 +41,7 @@ def euclidean_distance(x1: float, y1: float, x2: float, y2: float,
     return math.sqrt(dx*dx + dy*dy + dz*dz)
 
 
-def create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str = 'euclidean') -> nx.DiGraph:
+def create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str = DISTANCE_EUCLIDEAN) -> nx.DiGraph:
     """Create NetworkX graph with spatial nodes and weighted edges"""
     G = nx.DiGraph()
     
@@ -56,7 +61,7 @@ def create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str = 'eu
     return G
 
 
-def initialize_edge_attributes(G: nx.DiGraph, distance_type: str = 'euclidean') -> None:
+def initialize_edge_attributes(G: nx.DiGraph, distance_type: str = DISTANCE_EUCLIDEAN) -> None:
     """Initialize edge attributes: length, locked, skip (weight calculated later)"""
     for u, v in G.edges():
         ux, uy = G.nodes[u]["x"], G.nodes[u]["y"]
@@ -65,7 +70,7 @@ def initialize_edge_attributes(G: nx.DiGraph, distance_type: str = 'euclidean') 
         vz = G.nodes[v].get("z")
 
         # Calculate distance based on type
-        if distance_type == 'haversine':
+        if distance_type == DISTANCE_HAVERSINE:
             length = haversine_distance(uy, ux, vy, vx)  # lat, lon order
         else:  # euclidean
             length = euclidean_distance(ux, uy, vx, vy, uz, vz)
@@ -78,11 +83,12 @@ def initialize_edge_attributes(G: nx.DiGraph, distance_type: str = 'euclidean') 
 def update_attributes(graph: nx.DiGraph, d: float = 1.0) -> None:
     """Prepare graph for bundling by calculating weights and resetting state."""
     for u, v in graph.edges():
-        length = graph.edges[u, v]["length"]
-        graph.edges[u, v]["weight"] = length ** d
+        edge_data = graph.edges[u, v]
+        length = edge_data["length"]
+        edge_data["weight"] = length ** d
         # Reset bundling state for fresh run
-        graph.edges[u, v]["locked"] = False
-        graph.edges[u, v]["skip"] = False
+        edge_data["locked"] = False
+        edge_data["skip"] = False
 
 
 def sort_edges(graph: nx.DiGraph) -> List[Tuple]:
@@ -92,22 +98,22 @@ def sort_edges(graph: nx.DiGraph) -> List[Tuple]:
                   reverse=True)
 
 
+def _edge_weight_with_skip(_, __, edge_data):
+    """Weight function that excludes edges where skip=True"""
+    if edge_data.get('skip', False):
+        return float('inf')
+    return edge_data.get('weight', 1.0)
+
+
 def dijkstra_with_skip(graph: nx.DiGraph, source, target) -> Optional[List]:
     """Find shortest path from source to target, excluding edges where skip=True"""
-    # Use networkx dijkstra with custom weight function to avoid graph copying
-    def weight_func(u, v, edge_data):
-        # Return infinite weight for skipped edges (effectively excluding them)
-        if edge_data.get('skip', False):
-            return float('inf')
-        return edge_data.get('weight', 1.0)
-    
     try:
-        return nx.dijkstra_path(graph, source, target, weight=weight_func)
+        return nx.dijkstra_path(graph, source, target, weight=_edge_weight_with_skip)
     except nx.NetworkXNoPath:
         return None
 
 
-def calculate_path_length(graph: nx.DiGraph, path: List) -> float:
+def calculate_path_length(graph: nx.DiGraph, path: List[int]) -> float:
     """
     Calculate the total length of a path through the graph.
     
@@ -124,8 +130,9 @@ def calculate_path_length(graph: nx.DiGraph, path: List) -> float:
     total_length = 0.0
     for i in range(len(path) - 1):
         u, v = path[i], path[i + 1]
-        if graph.has_edge(u, v):
-            total_length += graph.edges[u, v]['length']
+        edge_data = graph.edges.get((u, v))
+        if edge_data:
+            total_length += edge_data['length']
         else:
             # This shouldn't happen if path is valid
             return float('inf')
@@ -157,32 +164,32 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
     
     # Main loop
     for i, (source, target) in enumerate(sorted_edges):
+        edge_data = graph.edges[source, target]
+        
         # if lock(e) then continue
-        if graph.edges[source, target]['locked']:
+        if edge_data['locked']:
             continue
             
-        graph.edges[source, target]['skip'] = True
+        edge_data['skip'] = True
         
-        s, t = source, target
-        
-        p = dijkstra_with_skip(graph, s, t)
+        p = dijkstra_with_skip(graph, source, target)
         
         if p is None:
-            graph.edges[source, target]['skip'] = False
+            edge_data['skip'] = False
             continue
         
         # Calculate detour ratio and check maximum distortion
         path_length = calculate_path_length(graph, p)
-        direct_length = graph.edges[source, target]['length']
+        direct_length = edge_data['length']
         detour_ratio = path_length / direct_length
         
         if detour_ratio > k:
-            graph.edges[source, target]['skip'] = False
+            edge_data['skip'] = False
             continue
         
         # Bundle successful - lock path edges and store result
-        for i in range(len(p) - 1):
-            u, v = p[i], p[i + 1]
+        for j in range(len(p) - 1):
+            u, v = p[j], p[j + 1]
             if graph.has_edge(u, v):
                 graph.edges[u, v]['locked'] = True
         
