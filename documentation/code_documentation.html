@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Edge Path Bundling</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: rgb(241, 246, 247);
+      color: #2c2c2c;
+      line-height: 1.6;
+    }
+
+    header {
+      background: linear-gradient(135deg, rgb(116, 178, 235), rgb(16, 115, 160));
+      color: rgb(241, 246, 247);
+      padding: 3rem 1.5rem;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 3rem;
+      margin-bottom: 0.4rem;
+    }
+
+    header h2 {
+      font-weight: 400;
+      font-size: 1.4rem;
+      margin-bottom: 1.5rem;
+      opacity: 0.9;
+    }
+
+    header p {
+      font-size: 1rem;
+      opacity: 0.85;
+    }
+
+    .page {
+        display: flex;
+        align-items: flex-start;
+        gap: 3rem;
+
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+    }
+
+    main {
+        flex: 1;
+        max-width: 900px;
+        min-width: 0;
+    }
+
+    section {
+      margin-bottom: 3rem;
+    }
+
+    h3 {
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 0.3rem;
+      margin-bottom: 1rem;
+    }
+
+    code {
+      background-color: #eee;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    pre {
+      background-color: #eee;
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.9rem;
+      color: #777;
+    }
+
+    ul {
+        padding-left: 1.2rem;
+    }
+
+    li {
+        margin-bottom: 0.6rem;
+    }
+
+    a {
+        color: rgb(16, 115, 160);
+        text-decoration: none;
+    }
+
+    a:hover {
+        text-decoration: underline;
+    }
+
+    .toc {
+        position: sticky;
+        top: 2rem;               
+        align-self: flex-start;
+
+        width: 200px;
+        font-size: 0.9rem;
+
+        background-color: rgba(241, 246, 247, 0.95);
+        padding: 1rem;
+
+        border-left: 3px solid rgb(73, 135, 194);
+    }
+
+    .toc strong {
+        display: block;
+        margin-bottom: 0.6rem;
+    }
+
+    .toc a {
+        display: block;
+        margin-bottom: 0.4rem;
+        color: #2c2c2c;
+        text-decoration: none;
+    }
+
+    .toc a:hover {
+        color: rgb(16, 115, 160);
+    }
+
+    .toc hr {
+      border: none;
+      border-top: 2px solid #e0e0e0;
+      margin: 1.5rem -1rem;
+    }
+
+    .toc-link {
+      color: rgb(16, 115, 160);
+      font-size: 1rem;
+      font-weight: 500;
+      margin-bottom: 0.6rem;
+    }
+
+    .toc-link:hover {
+      text-decoration: underline;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.8rem;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    th {
+      background-color: #f8f9fa;
+      font-weight: 600;
+      color: #2c2c2c;
+    }
+
+    tr:hover {
+      background-color: #f8f9fa;
+    }
+
+    /* Hide TOC on small screens */
+    @media (max-width: 1100px) {
+    .toc {
+        display: none;
+    }
+    }
+
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>Edge Path Bundling</h1>
+  <h2>Code Documentation</h2>
+  <p>
+    Clara Pichler and Paul Schmitt<br>
+    Final Project for the Course 193.166 Visualization at the Technical University of Vienna
+  </p>
+</header>
+
+<div class="page">
+  
+<main>
+
+<section id="overview">
+  <h3>Overview</h3>
+
+  <p>
+    This is the code documentation for the Edge Path Bundling project, which implements the edge bundling algorithm described 
+    in "Edge-Path Bundling: A Less Ambiguous Edge Bundling Approach" by Wallinger et al. The implementation includes a complete
+    Python codebase with interactive visualization capabilities.
+  </p>
+
+  <p>
+    The project is organized into several main components: core bundling algorithm implementation, data loading modules for different
+    dataset types, dashboard application for interactive exploration, and visualization rendering with Plotly. The <code>data</code> folder
+    contains three datasets (air traffic, brain connectivity, migration flows), while the <code>documentation</code> folder includes 
+    this code documentation along with project documentation and demo materials.
+  </p>
+
+  <h4>Project Structure</h4>
+  <table>
+    <thead>
+      <tr>
+        <th>Folder</th>
+        <th>File</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td rowspan="2">src/core</td>
+        <td>__init__.py</td>
+        <td>Package initialization</td>
+      </tr>
+      <tr>
+        <td><a href="#bundling">bundling.py</a></td>
+        <td>Core edge bundling algorithm implementation</td>
+      </tr>
+      <tr>
+        <td rowspan="4">src/data_loader</td>
+        <td>__init__.py</td>
+        <td>Package initialization</td>
+      </tr>
+      <tr>
+        <td><a href="#data_loader">air_traffic.py</a></td>
+        <td>OpenFlights airport and route data loader</td>
+      </tr>
+      <tr>
+        <td><a href="#data_loader">brain_connectivity.py</a></td>
+        <td>Brain connectivity GraphML data loader</td>
+      </tr>
+      <tr>
+        <td><a href="#data_loader">migration.py</a></td>
+        <td>US county migration flows data loader</td>
+      </tr>
+      <tr>
+        <td rowspan="2">src/dashboard</td>
+        <td><a href="#app">app.py</a></td>
+        <td>Interactive Dash web application</td>
+      </tr>
+      <tr>
+        <td>static/</td>
+        <td>Static assets (logos, CSS)</td>
+      </tr>
+      <tr>
+        <td rowspan="3">src/visualization</td>
+        <td>__init__.py</td>
+        <td>Package initialization</td>
+      </tr>
+      <tr>
+        <td>curves.py</td>
+        <td>Bézier curve generation utilities</td>
+      </tr>
+      <tr>
+        <td><a href="#plotly_renderer">plotly_renderer.py</a></td>
+        <td>Plotly-based network visualization renderer</td>
+      </tr>
+    </tbody>
+  </table>
+
+</section>
+
+<section id="bundling">
+  <h3>bundling.py</h3>
+
+  <p>
+    The core implementation of the Edge-Path Bundling algorithm following Algorithm 1 from the paper by Wallinger et al. 
+    This module provides the main bundling functionality that processes graphs to create bundled edge paths while maintaining 
+    a maximum distortion threshold.
+  </p>
+
+  <h4>Key Functions</h4>
+  <ul>
+    <li><strong>bundle_edges(graph, k, d)</strong> - Main algorithm implementation that processes edges in weight order and finds shortest paths for bundling</li>
+    <li><strong>create_graph(nodes, edges, distance_type)</strong> - Creates a NetworkX DiGraph from node/edge data with spatial attributes</li>
+    <li><strong>haversine_distance(lat1, lon1, lat2, lon2)</strong> - Calculates great circle distance for geographic coordinates</li>
+    <li><strong>euclidean_distance(x1, y1, x2, y2, z1, z2)</strong> - Calculates Euclidean distance in 2D or 3D space</li>
+    <li><strong>dijkstra_with_skip(graph, source, target)</strong> - Modified Dijkstra's algorithm that excludes locked edges</li>
+  </ul>
+
+  <h4>Algorithm Parameters</h4>
+  <ul>
+    <li><strong>k (distortion threshold)</strong> - Maximum allowed detour ratio (path length / direct distance)</li>
+    <li><strong>d (edge weight factor)</strong> - Exponent for edge length weighting (weight = length^d)</li>
+  </ul>
+
+  <p>
+    The algorithm sorts edges by weight (heaviest first), then for each edge attempts to find a shortest path while excluding 
+    previously bundled edges. If the path's detour ratio is within the threshold k, the path is accepted and its edges are locked.
+    Performance optimizations include early stopping and edge limits for large graphs.
+  </p>
+
+</section>
+
+<section id="data_loader">
+  <h3>data_loader</h3>
+
+  <p>
+    Collection of specialized data loading modules that handle different dataset formats and coordinate systems.
+    Each loader creates NetworkX graphs with appropriate distance metrics and spatial attributes for the bundling algorithm.
+  </p>
+
+  <h4>air_traffic.py</h4>
+  <p>
+    Loads OpenFlights airport and route data, handling CSV parsing for airport coordinates and route connections.
+    Uses haversine distance for geographic calculations. Filters invalid entries and creates directed graph with 
+    airport metadata including IATA codes, cities, and coordinates.
+  </p>
+
+  <h4>brain_connectivity.py</h4>
+  <p>
+    Processes GraphML files from the Human Connectome Project containing 3D brain region coordinates and structural 
+    connections. Handles MNI coordinate system conversion and creates 3D visualizations using Euclidean distance.
+    Supports filtering by connection strength thresholds.
+  </p>
+
+  <h4>migration.py</h4>
+  <p>
+    Parses US Census Bureau county-to-county migration flow data. Converts FIPS county codes to geographic coordinates
+    and filters by minimum flow thresholds. Uses haversine distance for geographic calculations and handles
+    coordinate lookup for US counties.
+  </p>
+
+</section>
+
+<section id="app">
+  <h3>app.py</h3>
+
+  <p>
+    Interactive Dash web application that provides a user interface for exploring edge path bundling on different datasets.
+    Features parameter controls, real-time visualization updates, and performance optimizations including caching and
+    progressive loading.
+  </p>
+
+  <h4>Key Features</h4>
+  <ul>
+    <li><strong>Parameter Controls</strong> - Sliders for bundling factor (k), edge weight factor (d), and smoothing level</li>
+    <li><strong>Dataset Selection</strong> - Dropdown for switching between brain, air traffic, and migration datasets</li>
+    <li><strong>Visualization Options</strong> - Toggle between highlighted and normal coloring for bundled edges</li>
+    <li><strong>Performance Optimization</strong> - Caching system for datasets and bundling results</li>
+    <li><strong>Responsive Design</strong> - Academic-styled interface with sidebar controls and main visualization area</li>
+  </ul>
+
+  <h4>Callback Architecture</h4>
+  <p>
+    Uses Dash callbacks for reactive updates: parameter displays update immediately, dataset changes reset controls,
+    bundling recalculation occurs for algorithm parameters, and fast updates for visualization-only changes.
+    Implements smart caching to avoid redundant computations.
+  </p>
+
+  <h4>Performance Constants</h4>
+  <ul>
+    <li>Major airports limited to 50 for demonstration</li>
+    <li>Migration data filtered to top 100 counties</li>
+    <li>Minimum flow threshold of 3,000 for migration data</li>
+    <li>Fixed curve sampling at 80 points for smooth rendering</li>
+  </ul>
+
+</section>
+
+<section id="plotly_renderer">
+  <h3>plotly_renderer.py</h3>
+
+  <p>
+    Comprehensive visualization module that renders bundled graphs using Plotly with support for 2D geographic maps,
+    3D brain visualizations, and smooth Bézier curve generation. Automatically detects data types and applies
+    appropriate rendering strategies.
+  </p>
+
+  <h4>Visualization Types</h4>
+  <ul>
+    <li><strong>Geographic Maps</strong> - Uses Plotly's Scattergeo for air traffic and migration data with automatic US/world map detection</li>
+    <li><strong>3D Brain Visualization</strong> - Interactive 3D plots for brain connectivity data with rotation and zoom controls</li>
+    <li><strong>Standard Network Plots</strong> - 2D scatter plots for general network data with optional geographic overlays</li>
+  </ul>
+
+  <h4>Curve Generation</h4>
+  <p>
+    Implements smooth Bézier curve generation using recursive subdivision and De Casteljau's algorithm.
+    Supports configurable smoothing levels (adding control points) and sampling resolution.
+    Works in both 2D and 3D coordinate systems for consistent curve appearance.
+  </p>
+
+  <h4>Performance Features</h4>
+  <ul>
+    <li>Automatic edge limiting for dense networks (500-1000 edges)</li>
+    <li>Color scheme optimization for different visualization contexts</li>
+    <li>Hover information with path details and distortion ratios</li>
+    <li>Responsive layout configuration for different screen sizes</li>
+  </ul>
+
+  <p>
+    The module uses explicit dataset type detection for faster rendering, falling back to automatic detection
+    for backward compatibility. Geographic data detection uses coordinate range validation and spread analysis.
+  </p>
+
+</section>
+
+</main>
+
+  <nav class="toc">
+    <strong>Contents</strong>
+    <a href="#overview">Overview</a>
+    <a href="#bundling">bundling.py</a>
+    <a href="#data_loader">data_loader</a>
+    <a href="#app">app.py</a>
+    <a href="#plotly_renderer">plotly_renderer.py</a>
+
+    <hr>
+
+    <a class="toc-link" href="images/demo.mov" target="_blank">Demo</a>
+    <a class="toc-link" href="documentation.html">Home</a>
+    <a class="toc-link" href="https://github.com/claraelisabeth/Visualization-193.166" target="_blank">
+        Source Code
+    </a>
+  </nav>
+
+</div>
+
+<footer>
+  2026 - Edge-Path Bundling - TU Vienna
+</footer>
+
+</body>
+</html>
