@@ -161,7 +161,8 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                             'padding': '4px 8px',
                             'border-radius': '12px',
                             'font-size': '12px',
-                            'font-weight': '600'
+                            'font-weight': '600',
+                            'white-space': 'nowrap'
                         })
                     ]),
                     dcc.Slider(
@@ -200,7 +201,8 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                             'padding': '4px 8px',
                             'border-radius': '12px',
                             'font-size': '12px',
-                            'font-weight': '600'
+                            'font-weight': '600',
+                            'white-space': 'nowrap'
                         })
                     ]),
                     dcc.Slider(
@@ -251,7 +253,8 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                             'padding': '4px 8px',
                             'border-radius': '12px',
                             'font-size': '12px',
-                            'font-weight': '600'
+                            'font-weight': '600',
+                            'white-space': 'nowrap'
                         })
                     ]),
                     dcc.Slider(
@@ -290,6 +293,32 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                         inputStyle={'margin-right': '6px', 'margin-left': '0px'}
                     ),
                     html.P("Choose how bundled edges are colored", style={
+                        'color': TEXT_SECONDARY,
+                        'font-size': '11px',
+                        'margin': '8px 0 0 0'
+                    })
+                ]),
+                
+                # Bundled edge thickness toggle
+                html.Div(style={'margin-top': '16px'}, children=[
+                    html.Label("Bundled Edge Thickness", style={
+                        'color': TEXT_PRIMARY,
+                        'font-size': '13px',
+                        'font-weight': '500',
+                        'margin-bottom': '8px',
+                        'display': 'block'
+                    }),
+                    dcc.RadioItems(
+                        id='edge-thickness-toggle',
+                        options=[
+                            {'label': 'Thick (2-4x)', 'value': 'thick'},
+                            {'label': 'Normal (same)', 'value': 'normal'}
+                        ],
+                        value='normal',
+                        style={'color': TEXT_PRIMARY, 'font-size': '13px'},
+                        inputStyle={'margin-right': '6px', 'margin-left': '0px'}
+                    ),
+                    html.P("Choose thickness of bundled edges relative to unbundled ones", style={
                         'color': TEXT_SECONDARY,
                         'font-size': '11px',
                         'margin': '8px 0 0 0'
@@ -351,7 +380,8 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                     children=[dcc.Graph(
                         figure={}, 
                         id='main-graph',
-                        style={'height': 'calc(100vh - 220px)', 'width': '100%'}
+                        style={'height': 'calc(100vh - 220px)', 'width': '100%'},
+                        config={'displayModeBar': False}
                     )],
                     style={
                         'height': '100%',
@@ -424,20 +454,21 @@ def reset_sliders_on_dataset_change(dataset):
 def show_loading_message(dataset, bundling_factor, edge_weight_factor):
     """Show immediate loading message when bundling parameters change."""
     dataset_name = DATASET_NAMES.get(dataset, 'Unknown')
-    return f"🔄 Loading {dataset_name} dataset and running bundling algorithm..."
+    return f"Loading {dataset_name} dataset and running bundling algorithm..."
 
 # Fast callback for visualization-only changes
 @app.callback(
     [Output('main-graph', 'figure', allow_duplicate=True), Output('loading-status', 'children', allow_duplicate=True)],
     [Input('smoothing-level-slider', 'value'),
-     Input('edge-color-toggle', 'value')],
+     Input('edge-color-toggle', 'value'),
+     Input('edge-thickness-toggle', 'value')],
     [State('main-graph', 'figure'),
      State('dataset-dropdown', 'value'),
      State('bundling-factor-slider', 'value'),
      State('edge-weight-slider', 'value')],
     prevent_initial_call=True
 )
-def update_visualization_only(smoothing_level, edge_color, current_fig, dataset, bundling_factor, edge_weight_factor):
+def update_visualization_only(smoothing_level, edge_color, edge_thickness, current_fig, dataset, bundling_factor, edge_weight_factor):
     """Fast update for visualization-only changes (no bundling recalculation)."""
     if not current_fig or not dataset:
         return current_fig, "No data available"
@@ -462,10 +493,11 @@ def update_visualization_only(smoothing_level, edge_color, current_fig, dataset,
         smoothing_level=smoothing_level, 
         num_samples=FIXED_NUM_SAMPLES,
         dataset_type=dataset_type, 
-        edge_color_mode=edge_color
+        edge_color_mode=edge_color,
+        bundled_edge_thickness=edge_thickness
     )
     
-    return fig, f"✓ Visualization updated (smoothing: {smoothing_level}, color: {edge_color})"
+    return fig, f"Visualization updated (smoothing: {smoothing_level}, color: {edge_color}, thickness: {edge_thickness})"
 
 def _get_cached_dataset(dataset_key):
     """Get dataset from cache or load and cache it for performance."""
@@ -496,7 +528,7 @@ def _load_dataset(dataset):
     else:  # migration
         title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
     
-    status = f"✓ {DATASET_NAMES.get(dataset, 'Unknown')} dataset loaded and processed"
+    status = f"{DATASET_NAMES.get(dataset, 'Unknown')} dataset loaded and processed"
     return graph, title, status
 
 
@@ -532,10 +564,11 @@ def _get_dataset_type(dataset):
      Input('bundling-factor-slider', 'value'),
      Input('edge-weight-slider', 'value')],
     [State('smoothing-level-slider', 'value'),
-     State('edge-color-toggle', 'value')],
+     State('edge-color-toggle', 'value'),
+     State('edge-thickness-toggle', 'value')],
     prevent_initial_call='initial_duplicate'
 )
-def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, edge_color):
+def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, edge_color, edge_thickness):
     """Update the main graph based on selected parameters."""
     
     # Handle None values (initial load)
@@ -543,6 +576,7 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, 
     bundling_factor = bundling_factor or DEFAULT_BUNDLING_FACTOR
     edge_weight_factor = edge_weight_factor or DEFAULT_EDGE_WEIGHT_FACTOR
     smoothing_level = smoothing_level or DEFAULT_SMOOTHING_LEVEL
+    edge_thickness = edge_thickness or 'normal'
     
     # Load dataset (with caching for performance)
     graph, title, status_msg = _load_dataset(dataset)
@@ -570,7 +604,8 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, 
         smoothing_level=smoothing_level, 
         num_samples=FIXED_NUM_SAMPLES,
         dataset_type=dataset_type, 
-        edge_color_mode=edge_color
+        edge_color_mode=edge_color,
+        bundled_edge_thickness=edge_thickness
     )
     
     # Create stats text

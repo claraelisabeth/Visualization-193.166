@@ -37,11 +37,20 @@ COLORS = {
     'node': 'rgb(78, 110, 77)'
 }
 
+# Line width configurations
+LINE_WIDTHS = {
+    'unbundled': {'2d': 1, '3d': 2, 'map': 1},
+    'bundled_thick': {'2d': 2.5, '3d': 4, 'map': 3},
+    'bundled_normal': {'2d': 1, '3d': 2, 'map': 1},  # Same as unbundled
+    'bundled_thin': {'2d': 0.8, '3d': 1.5, 'map': 0.8}
+}
+
 
 def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
                                 use_curves: bool = True, smoothing_level: int = 2,
                                 num_samples: int = 100, dataset_type: Optional[str] = None,
-                                edge_color_mode: str = 'highlight') -> go.Figure:
+                                edge_color_mode: str = 'highlight', 
+                                bundled_edge_thickness: str = 'thick') -> go.Figure:
     """
     Create a Plotly network visualization with smooth bundled paths.
     
@@ -54,6 +63,7 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         num_samples: Curve sampling points (paper default: 100)
         dataset_type: Type of dataset ('brain_3d', 'air_traffic', 'migration', or None for auto-detect)
         edge_color_mode: Color mode for bundled edges ('highlight' for red, 'normal' for gray)
+        bundled_edge_thickness: Edge thickness mode ('thick', 'normal', 'thin')
         
     Returns:
         Plotly Figure object
@@ -61,7 +71,7 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
     # Use explicit dataset type if provided (much faster than auto-detection)
     if dataset_type == 'brain_3d':
         # Create 3D visualization for brain data
-        return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples, edge_color_mode)
+        return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples, edge_color_mode, bundled_edge_thickness)
     
     elif dataset_type in ['air_traffic', 'migration']:
         # Create map-based visualization for geographic data
@@ -69,12 +79,12 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         try:
             return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
                                            use_curves, smoothing_level, num_samples, 
-                                           edge_color_mode, is_map=True)
+                                           edge_color_mode, is_map=True, bundled_edge_thickness=bundled_edge_thickness)
         except Exception:
             # Fallback to scatter plot if map fails
             return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
                                            use_curves, smoothing_level, num_samples, 
-                                           edge_color_mode, is_map=False)
+                                           edge_color_mode, is_map=False, bundled_edge_thickness=bundled_edge_thickness)
     
     # Fallback to auto-detection (for backward compatibility)
     else:
@@ -83,7 +93,7 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         
         if has_3d_coords:
             # Create 3D visualization for brain data
-            return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples, edge_color_mode)
+            return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples, edge_color_mode, bundled_edge_thickness)
         
         # Get node positions for 2D visualization
         node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
@@ -96,7 +106,7 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
             try:
                 return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
                                                use_curves, smoothing_level, num_samples, 
-                                               edge_color_mode, is_map=True)
+                                               edge_color_mode, is_map=True, bundled_edge_thickness=bundled_edge_thickness)
             except Exception:
                 # Create error figure for geographic data when map fails
                 fig = go.Figure()
@@ -117,7 +127,7 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
             # Create standard scatter plot visualization
             return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
                                            use_curves, smoothing_level, num_samples, 
-                                           edge_color_mode, is_map=False)
+                                           edge_color_mode, is_map=False, bundled_edge_thickness=bundled_edge_thickness)
 
 
 def _is_brain_3d_data(graph) -> bool:
@@ -208,12 +218,32 @@ def _get_visualization_colors(edge_color_mode: str, is_map: bool = False) -> Dic
         }
 
 
+def _get_line_widths(bundled_edge_thickness: str, viz_type: str) -> Dict[str, float]:
+    """Get line widths based on thickness setting and visualization type.
+    
+    Args:
+        bundled_edge_thickness: 'thick', 'normal', or 'thin'
+        viz_type: '2d', '3d', or 'map'
+        
+    Returns:
+        Dictionary with 'unbundled' and 'bundled' line widths
+    """
+    bundled_key = f'bundled_{bundled_edge_thickness}'
+    return {
+        'unbundled': LINE_WIDTHS['unbundled'][viz_type],
+        'bundled': LINE_WIDTHS[bundled_key][viz_type]
+    }
+
+
 def _create_2d_visualization(graph, bundled_paths: List[Dict], node_positions: Dict, title: str,
                             use_curves: bool, smoothing_level: int, num_samples: int, 
-                            edge_color_mode: str = 'highlight', is_map: bool = False) -> go.Figure:
+                            edge_color_mode: str = 'highlight', is_map: bool = False, 
+                            bundled_edge_thickness: str = 'thick') -> go.Figure:
     """Create 2D visualization (map or scatter plot) for geographic or standard data."""
     fig = go.Figure()
     colors = _get_visualization_colors(edge_color_mode, is_map)
+    viz_type = 'map' if is_map else '2d'
+    line_widths = _get_line_widths(bundled_edge_thickness, viz_type)
     
     # Choose appropriate drawing functions based on visualization type
     if is_map:
@@ -230,12 +260,12 @@ def _create_2d_visualization(graph, bundled_paths: List[Dict], node_positions: D
         layout_func = _configure_layout
     
     # Draw visualization elements
-    edge_func(fig, graph, node_positions, colors['unbundled'])
+    edge_func(fig, graph, node_positions, colors['unbundled'], line_widths['unbundled'])
     
     if use_curves:
-        curve_func(fig, bundled_paths, node_positions, colors['bundled'], smoothing_level, num_samples)
+        curve_func(fig, bundled_paths, node_positions, colors['bundled'], smoothing_level, num_samples, line_widths['bundled'])
     else:
-        segment_func(fig, bundled_paths, node_positions, colors['bundled'])
+        segment_func(fig, bundled_paths, node_positions, colors['bundled'], line_widths['bundled'])
     
     node_func(fig, graph, node_positions, colors['node'])
     layout_func(fig, title, use_curves, node_positions)
@@ -243,7 +273,7 @@ def _create_2d_visualization(graph, bundled_paths: List[Dict], node_positions: D
     return fig
 
 
-def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str):
+def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str, width: float):
     """Add unbundled edges as straight lines."""
     unbundled_edges = [(u, v) for u, v, data in graph.edges(data=True) 
                       if not data.get('bundled', False)]
@@ -257,7 +287,7 @@ def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str
                 x=[x0, x1, None], 
                 y=[y0, y1, None],
                 mode='lines',
-                line=dict(color=color, width=1),
+                line=dict(color=color, width=width),
                 hoverinfo='none',
                 showlegend=False,
                 name='unbundled'
@@ -266,7 +296,7 @@ def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str
 
 def _add_bundled_curves(fig: go.Figure, bundled_paths: List[Dict], 
                        node_positions: Dict, color: str,
-                       smoothing_level: int, num_samples: int):
+                       smoothing_level: int, num_samples: int, width: float):
     """Add bundled paths as smooth Bézier curves."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
@@ -289,7 +319,7 @@ def _add_bundled_curves(fig: go.Figure, bundled_paths: List[Dict],
                 x=x_coords, 
                 y=y_coords,
                 mode='lines',
-                line=dict(color=color, width=2.5),
+                line=dict(color=color, width=width),
                 hoverinfo='text',
                 hovertext=hover_text,
                 showlegend=False,
@@ -298,7 +328,7 @@ def _add_bundled_curves(fig: go.Figure, bundled_paths: List[Dict],
 
 
 def _add_bundled_segments(fig: go.Figure, bundled_paths: List[Dict], 
-                         node_positions: Dict, color: str):
+                         node_positions: Dict, color: str, width: float):
     """Add bundled paths as straight line segments (for comparison)."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
@@ -322,7 +352,7 @@ def _add_bundled_segments(fig: go.Figure, bundled_paths: List[Dict],
                 x=x_coords, 
                 y=y_coords,
                 mode='lines',
-                line=dict(color=color, width=2),
+                line=dict(color=color, width=width),
                 hoverinfo='text',
                 hovertext=hover_text,
                 showlegend=False,
@@ -419,7 +449,7 @@ def _configure_layout(fig: go.Figure, title: str, use_curves: bool, node_positio
 
 
 # Map-specific visualization functions
-def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color: str):
+def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color: str, width: float):
     """Add unbundled edges for map visualization."""
     unbundled_edges = [(u, v) for u, v, data in graph.edges(data=True) 
                       if not data.get('bundled', False)]
@@ -437,7 +467,7 @@ def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color:
                 lon=[lon0, lon1], 
                 lat=[lat0, lat1],
                 mode='lines',
-                line=dict(color=color, width=1),
+                line=dict(color=color, width=width),
                 hoverinfo='none',
                 showlegend=False,
                 name='unbundled'
@@ -446,7 +476,7 @@ def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color:
 
 def _add_bundled_curves_map(fig: go.Figure, bundled_paths: List[Dict], 
                            node_positions: Dict, color: str,
-                           smoothing_level: int, num_samples: int):
+                           smoothing_level: int, num_samples: int, width: float):
     """Add bundled paths as smooth curves for map visualization."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
@@ -469,7 +499,7 @@ def _add_bundled_curves_map(fig: go.Figure, bundled_paths: List[Dict],
                 lon=lon_coords, 
                 lat=lat_coords,
                 mode='lines',
-                line=dict(color=color, width=3),
+                line=dict(color=color, width=width),
                 hoverinfo='text',
                 hovertext=hover_text,
                 showlegend=False,
@@ -478,7 +508,7 @@ def _add_bundled_curves_map(fig: go.Figure, bundled_paths: List[Dict],
 
 
 def _add_bundled_segments_map(fig: go.Figure, bundled_paths: List[Dict], 
-                             node_positions: Dict, color: str):
+                             node_positions: Dict, color: str, width: float):
     """Add bundled paths as straight segments for map visualization."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
@@ -502,7 +532,7 @@ def _add_bundled_segments_map(fig: go.Figure, bundled_paths: List[Dict],
                 lon=lon_coords, 
                 lat=lat_coords,
                 mode='lines',
-                line=dict(color=color, width=2),
+                line=dict(color=color, width=width),
                 hoverinfo='text',
                 hovertext=hover_text,
                 showlegend=False,
@@ -583,26 +613,28 @@ def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool, node_pos
 
 
 def _create_3d_visualization(graph, bundled_paths: List[Dict], title: str,
-                            use_curves: bool, smoothing_level: int, num_samples: int, edge_color_mode: str = 'highlight') -> go.Figure:
+                            use_curves: bool, smoothing_level: int, num_samples: int, 
+                            edge_color_mode: str = 'highlight', bundled_edge_thickness: str = 'thick') -> go.Figure:
     """Create interactive 3D visualization for brain data."""
     fig = go.Figure()
     
     # Get 3D node positions
     node_positions_3d = {node: (data['x'], data['y'], data['z']) for node, data in graph.nodes(data=True)}
     
-    # Define colors based on mode
+    # Define colors and line widths
     unbundled_color = 'lightgray'
     bundled_color = 'red' if edge_color_mode == 'highlight' else 'lightgray'
     node_color = 'rgb(78, 110, 77)'  # Green from dashboard theme
+    line_widths = _get_line_widths(bundled_edge_thickness, '3d')
     
     # Draw unbundled edges
-    _add_unbundled_edges_3d(fig, graph, node_positions_3d, unbundled_color)
+    _add_unbundled_edges_3d(fig, graph, node_positions_3d, unbundled_color, line_widths['unbundled'])
     
     # Draw bundled paths
     if use_curves:
-        _add_bundled_curves_3d(fig, bundled_paths, node_positions_3d, bundled_color, smoothing_level, num_samples)
+        _add_bundled_curves_3d(fig, bundled_paths, node_positions_3d, bundled_color, smoothing_level, num_samples, line_widths['bundled'])
     else:
-        _add_bundled_segments_3d(fig, bundled_paths, node_positions_3d, bundled_color)
+        _add_bundled_segments_3d(fig, bundled_paths, node_positions_3d, bundled_color, line_widths['bundled'])
     
     # Draw nodes
     _add_nodes_3d(fig, graph, node_positions_3d, node_color)
@@ -613,7 +645,7 @@ def _create_3d_visualization(graph, bundled_paths: List[Dict], title: str,
     return fig
 
 
-def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: str):
+def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: str, width: float):
     """Add unbundled edges as 3D lines."""
     unbundled_edges = [(u, v) for u, v, data in graph.edges(data=True) 
                       if not data.get('bundled', False)]
@@ -632,7 +664,7 @@ def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: 
                 y=[y0, y1, None],
                 z=[z0, z1, None],
                 mode='lines',
-                line=dict(color=color, width=2),
+                line=dict(color=color, width=width),
                 hoverinfo='none',
                 showlegend=False,
                 name='unbundled'
@@ -641,7 +673,7 @@ def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: 
 
 def _add_bundled_curves_3d(fig: go.Figure, bundled_paths: List[Dict], 
                           node_positions: Dict, color: str,
-                          smoothing_level: int, num_samples: int):
+                          smoothing_level: int, num_samples: int, width: float):
     """Add bundled paths as smooth 3D curves."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
@@ -664,7 +696,7 @@ def _add_bundled_curves_3d(fig: go.Figure, bundled_paths: List[Dict],
                 y=y_coords,
                 z=z_coords,
                 mode='lines',
-                line=dict(color=color, width=4),
+                line=dict(color=color, width=width),
                 hoverinfo='text',
                 hovertext=hover_text,
                 showlegend=False,
@@ -673,7 +705,7 @@ def _add_bundled_curves_3d(fig: go.Figure, bundled_paths: List[Dict],
 
 
 def _add_bundled_segments_3d(fig: go.Figure, bundled_paths: List[Dict], 
-                            node_positions: Dict, color: str):
+                            node_positions: Dict, color: str, width: float):
     """Add bundled paths as 3D line segments."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
@@ -694,7 +726,7 @@ def _add_bundled_segments_3d(fig: go.Figure, bundled_paths: List[Dict],
                 y=y_coords,
                 z=z_coords,
                 mode='lines',
-                line=dict(color=color, width=3),
+                line=dict(color=color, width=width),
                 hoverinfo='text',
                 hovertext=hover_text,
                 showlegend=False,
@@ -862,7 +894,7 @@ def _configure_3d_layout(fig: go.Figure, title: str, use_curves: bool):
         ),
         annotations=[
             dict(
-                text=f"🧠 Use mouse to rotate, zoom, and pan | Red: bundled paths ({curve_type}), Gray: direct connections",
+                text=f"Use mouse to rotate, zoom, and pan | Red: bundled paths ({curve_type}), Gray: direct connections",
                 showarrow=False,
                 xref="paper", yref="paper",
                 x=0.5, y=0.02,
