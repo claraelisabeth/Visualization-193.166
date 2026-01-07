@@ -170,31 +170,3 @@ def create_smooth_bundled_path(path_nodes: List, node_positions: dict,
     
     return curve_points
 
-
-# Test functions
-def test_bezier_generation():
-    """Test Bézier curve generation with simple data."""
-    print("Testing Bézier curve generation...")
-    
-    # Simple test path: A -> B -> C
-    path_nodes = ['A', 'B', 'C']
-    node_positions = {
-        'A': (0, 0),
-        'B': (1, 1), 
-        'C': (2, 0)
-    }
-    
-    # Test control point generation
-    control_points = generate_control_points(path_nodes, node_positions, smoothing_level=2)
-    print(f"Control points: {len(control_points)} points")
-    
-    # Test curve generation  
-    curve = create_smooth_bundled_path(path_nodes, node_positions)
-    print(f"Generated curve: {len(curve)} sample points")
-    print(f"Start: {curve[0]}, End: {curve[-1]}")
-    
-    return curve
-
-
-if __name__ == "__main__":
-    test_bezier_generation()

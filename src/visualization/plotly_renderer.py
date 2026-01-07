@@ -2,18 +2,20 @@
 Plotly Visualization Renderer for Edge Path Bundling
 
 This module handles visualization of bundled graphs using Plotly,
-with support for smooth Bezier curves following the paper's approach.
+with support for smooth Bézier curves following the paper's approach.
 """
 
 import plotly.graph_objects as go
 import numpy as np
+import random
 from typing import Dict, List, Tuple, Optional
 from .curves import create_smooth_bundled_path
 
 
 def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
                                 use_curves: bool = True, smoothing_level: int = 2,
-                                num_samples: int = 100, use_map: Optional[bool] = None) -> go.Figure:
+                                num_samples: int = 100, dataset_type: Optional[str] = None,
+                                edge_color_mode: str = 'highlight') -> go.Figure:
     """
     Create a Plotly network visualization with smooth bundled paths.
     
@@ -22,52 +24,66 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         bundled_paths: List of bundled path dictionaries
         title: Plot title
         use_curves: Whether to use smooth curves (True) or line segments (False)
-        smoothing_level: Bezier smoothing level (paper default: 2)
+        smoothing_level: Bézier smoothing level (paper default: 2)
         num_samples: Curve sampling points (paper default: 100)
-        use_map: Whether to use map background (auto-detect if None)
+        dataset_type: Type of dataset ('brain_3d', 'air_traffic', 'migration', or None for auto-detect)
+        edge_color_mode: Color mode for bundled edges ('highlight' for red, 'normal' for gray)
         
     Returns:
         Plotly Figure object
     """
-    # Check if this is 3D brain data (has z coordinates)
-    has_3d_coords = _is_brain_3d_data(graph)
-    
-    if has_3d_coords:
+    # Use explicit dataset type if provided (much faster than auto-detection)
+    if dataset_type == 'brain_3d':
         # Create 3D visualization for brain data
-        fig = _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples)
-        return fig
+        return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples, edge_color_mode)
     
-    # Get node positions for 2D visualization
-    node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
-    
-    # Auto-detect if we should use map (geographic coordinates)
-    if use_map is None:
-        use_map = _is_geographic_data(node_positions)
-    
-    if use_map:
-        # Create map-based visualization
+    elif dataset_type in ['air_traffic', 'migration']:
+        # Create map-based visualization for geographic data
+        node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
         try:
-            fig = _create_map_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
+            return _create_map_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples, edge_color_mode)
         except Exception as e:
-            # Create error figure for geographic data when map fails
-            fig = go.Figure()
-            fig.add_annotation(
-                text=f"Map visualization failed: {str(e)}<br>Please install plotly with mapbox support",
-                xref="paper", yref="paper", x=0.5, y=0.5,
-                showarrow=False, font=dict(size=16, color="red"),
-                bgcolor="rgba(255,255,255,0.8)", bordercolor="red", borderwidth=2
-            )
-            fig.update_layout(
-                title=f"{title} - Map Error",
-                xaxis=dict(visible=False),
-                yaxis=dict(visible=False),
-                plot_bgcolor='white'
-            )
-    else:
-        # Create standard scatter plot visualization
-        fig = _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples)
+            # Fallback to scatter plot if map fails
+            return _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples, edge_color_mode)
     
-    return fig
+    # Fallback to auto-detection (for backward compatibility)
+    else:
+        # Check if this is 3D brain data (has z coordinates)
+        has_3d_coords = _is_brain_3d_data(graph)
+        
+        if has_3d_coords:
+            # Create 3D visualization for brain data
+            return _create_3d_visualization(graph, bundled_paths, title, use_curves, smoothing_level, num_samples, edge_color_mode)
+        
+        # Get node positions for 2D visualization
+        node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
+        
+        # Auto-detect if we should use map (geographic coordinates)
+        use_map = _is_geographic_data(node_positions)
+        
+        if use_map:
+            # Create map-based visualization
+            try:
+                return _create_map_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples, edge_color_mode)
+            except Exception as e:
+                # Create error figure for geographic data when map fails
+                fig = go.Figure()
+                fig.add_annotation(
+                    text=f"Map visualization failed: {str(e)}<br>Please install plotly with mapbox support",
+                    xref="paper", yref="paper", x=0.5, y=0.5,
+                    showarrow=False, font=dict(size=16, color="red"),
+                    bgcolor="rgba(255,255,255,0.8)", bordercolor="red", borderwidth=2
+                )
+                fig.update_layout(
+                    title=f"{title} - Map Error",
+                    xaxis=dict(visible=False),
+                    yaxis=dict(visible=False),
+                    plot_bgcolor='white'
+                )
+                return fig
+        else:
+            # Create standard scatter plot visualization
+            return _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples, edge_color_mode)
 
 
 def _is_brain_3d_data(graph) -> bool:
@@ -130,14 +146,14 @@ def _is_us_data(node_positions: Dict) -> bool:
 
 
 def _create_map_visualization(graph, bundled_paths: List[Dict], node_positions: Dict, title: str,
-                             use_curves: bool, smoothing_level: int, num_samples: int) -> go.Figure:
+                             use_curves: bool, smoothing_level: int, num_samples: int, edge_color_mode: str = 'highlight') -> go.Figure:
     """Create map-based visualization for geographic data."""
     fig = go.Figure()
     
-    # Define colors
+    # Define colors based on mode
     unbundled_color = 'rgba(150, 150, 150, 0.4)'  # More transparent for map
-    bundled_color = 'rgba(255, 50, 50, 0.8)'      # More opaque for emphasis
-    node_color = 'rgba(16, 115, 160, 0.9)'         # Dashboard color1
+    bundled_color = 'rgba(255, 50, 50, 0.8)' if edge_color_mode == 'highlight' else 'rgba(150, 150, 150, 0.6)'
+    node_color = 'rgba(78, 110, 77, 0.9)'         # Dashboard green
     
     # Draw unbundled edges
     _add_unbundled_edges_map(fig, graph, node_positions, unbundled_color)
@@ -158,14 +174,14 @@ def _create_map_visualization(graph, bundled_paths: List[Dict], node_positions: 
 
 
 def _create_scatter_visualization(graph, bundled_paths: List[Dict], node_positions: Dict, title: str,
-                                 use_curves: bool, smoothing_level: int, num_samples: int) -> go.Figure:
+                                 use_curves: bool, smoothing_level: int, num_samples: int, edge_color_mode: str = 'highlight') -> go.Figure:
     """Create standard scatter plot visualization for non-geographic data."""
     fig = go.Figure()
     
-    # Define colors
+    # Define colors based on mode
     unbundled_color = 'lightgray'
-    bundled_color = 'rgb(255, 127, 63)'
-    node_color = 'rgb(16, 115, 160)'  # color from dashboard theme
+    bundled_color = 'red' if edge_color_mode == 'highlight' else 'lightgray'
+    node_color = 'rgb(78, 110, 77)'  # Green from dashboard theme
     
     # Draw unbundled edges (straight lines)
     _add_unbundled_edges(fig, graph, node_positions, unbundled_color)
@@ -210,7 +226,7 @@ def _add_unbundled_edges(fig: go.Figure, graph, node_positions: Dict, color: str
 def _add_bundled_curves(fig: go.Figure, bundled_paths: List[Dict], 
                        node_positions: Dict, color: str,
                        smoothing_level: int, num_samples: int):
-    """Add bundled paths as smooth Bezier curves."""
+    """Add bundled paths as smooth Bézier curves."""
     for i, bundle in enumerate(bundled_paths):
         path_nodes = bundle['path']
         
@@ -294,7 +310,7 @@ def _add_nodes(fig: go.Figure, graph, node_positions: Dict, color: str):
 
 def _configure_layout(fig: go.Figure, title: str, use_curves: bool, node_positions: Dict = None):
     """Configure the plot layout."""
-    curve_type = "Smooth Bezier curves" if use_curves else "Line segments"
+    curve_type = "Smooth Bézier curves" if use_curves else "Line segments"
     annotation_text = f"Red: bundled paths ({curve_type}), Gray: direct edges"
     
     # Check if this might be geographic data based on coordinate ranges
@@ -371,58 +387,6 @@ def _configure_layout(fig: go.Figure, title: str, use_curves: bool, node_positio
         )
 
 
-def create_comparison_visualization(graph, bundled_paths: List[Dict], title: str) -> go.Figure:
-    """
-    Create side-by-side comparison of line segments vs smooth curves.
-    
-    Args:
-        graph: NetworkX graph
-        bundled_paths: List of bundled path dictionaries
-        title: Base title for the plot
-        
-    Returns:
-        Plotly Figure with subplots
-    """
-    from plotly.subplots import make_subplots
-    
-    fig = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=("Line Segments", "Smooth Bezier Curves"),
-        specs=[[{"type": "scatter"}, {"type": "scatter"}]]
-    )
-    
-    # Get node positions
-    node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
-    
-    # Left plot: line segments
-    segments_fig = create_network_visualization(
-        graph, bundled_paths, "", use_curves=False
-    )
-    
-    # Right plot: smooth curves  
-    curves_fig = create_network_visualization(
-        graph, bundled_paths, "", use_curves=True
-    )
-    
-    # Add traces to subplots
-    for trace in segments_fig.data:
-        fig.add_trace(trace, row=1, col=1)
-    
-    for trace in curves_fig.data:
-        fig.add_trace(trace, row=1, col=2)
-    
-    # Update layout
-    fig.update_layout(
-        title_text=f"{title} - Visualization Comparison",
-        showlegend=False
-    )
-    
-    # Update subplot axes
-    for i in [1, 2]:
-        fig.update_xaxes(showgrid=False, zeroline=False, showticklabels=False, row=1, col=i)
-        fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, row=1, col=i)
-    
-    return fig
 
 # Map-specific visualization functions
 def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color: str):
@@ -432,7 +396,6 @@ def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color:
     
     # Limit edges for performance
     if len(unbundled_edges) > 500:
-        import random
         unbundled_edges = random.sample(unbundled_edges, 500)
     
     for u, v in unbundled_edges:
@@ -538,7 +501,7 @@ def _add_nodes_map(fig: go.Figure, graph, node_positions: Dict, color: str):
 
 def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool, node_positions: Dict = None):
     """Configure the map layout with automatic US detection."""
-    curve_type = "Smooth Bezier curves" if use_curves else "Line segments"
+    curve_type = "Smooth Bézier curves" if use_curves else "Line segments"
     annotation_text = f"Red: bundled paths ({curve_type}), Gray: direct routes"
     
     # Detect if this is US data and configure accordingly
@@ -590,17 +553,17 @@ def _configure_map_layout(fig: go.Figure, title: str, use_curves: bool, node_pos
 
 
 def _create_3d_visualization(graph, bundled_paths: List[Dict], title: str,
-                            use_curves: bool, smoothing_level: int, num_samples: int) -> go.Figure:
+                            use_curves: bool, smoothing_level: int, num_samples: int, edge_color_mode: str = 'highlight') -> go.Figure:
     """Create interactive 3D visualization for brain data."""
     fig = go.Figure()
     
     # Get 3D node positions
     node_positions_3d = {node: (data['x'], data['y'], data['z']) for node, data in graph.nodes(data=True)}
     
-    # Define colors
+    # Define colors based on mode
     unbundled_color = 'lightgray'
-    bundled_color = 'rgb(255, 127, 63)'
-    node_color = 'rgb(16, 115, 160)'  #  from dashboard theme
+    bundled_color = 'red' if edge_color_mode == 'highlight' else 'lightgray'
+    node_color = 'rgb(78, 110, 77)'  # Green from dashboard theme
     
     # Draw unbundled edges
     _add_unbundled_edges_3d(fig, graph, node_positions_3d, unbundled_color)
@@ -627,7 +590,6 @@ def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: 
     
     # Limit edges for performance (brain data can be dense)
     if len(unbundled_edges) > 1000:
-        import random
         unbundled_edges = random.sample(unbundled_edges, 1000)
     
     for u, v in unbundled_edges:
@@ -766,7 +728,7 @@ def _configure_3d_layout(fig: go.Figure, title: str, use_curves: bool):
     curve_type = "Smooth curves" if use_curves else "Line segments"
     
     fig.update_layout(
-        title=f"{title} - Interactive 3D Brain Network",
+        title=title,
         showlegend=False,
         hovermode='closest',
         margin=dict(l=0, r=0, b=0, t=40),

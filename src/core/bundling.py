@@ -157,10 +157,7 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
     
     # Main loop
     for i, (source, target) in enumerate(sorted_edges):
-        # Progress indicator for large graphs
-        if i % 500 == 0 and i > 0:
-            print(f"Processing edge {i}/{len(sorted_edges)}...")
-       
+        # if lock(e) then continue
         if graph.edges[source, target]['locked']:
             continue
             
@@ -204,7 +201,6 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
     
     return {
         'bundled_paths': bundled_paths,
-        'control_points': {},  # vertex coordinates for each bundled edge
         'statistics': {
             'total_edges': total_edges,
             'bundled': bundled_count,
