@@ -133,68 +133,6 @@
         color: rgb(16, 115, 160);
     }
 
-    .code-example {
-        background-color: #f8f9fa;
-        border: 1px solid #e0e0e0;
-        border-left: 4px solid rgb(73, 135, 194);
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 6px;
-    }
-
-    .algorithm-box {
-        background-color: #f0f8ff;
-        border: 1px solid #b8d4f0;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        border-radius: 6px;
-    }
-
-    .algorithm-box h5 {
-        margin: 0 0 1rem 0;
-        color: rgb(16, 115, 160);
-        font-weight: 600;
-    }
-
-    .parameter-table {
-        background-color: #f9f9f9;
-        border-radius: 6px;
-        overflow: hidden;
-        margin: 1rem 0;
-    }
-
-    .complexity-note {
-        background-color: #fff3cd;
-        border: 1px solid #ffeaa7;
-        border-left: 4px solid #f39c12;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 6px;
-    }
-
-    .note {
-        background-color: #e8f4fd;
-        border: 1px solid #bee5eb;
-        border-left: 4px solid rgb(73, 135, 194);
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 6px;
-    }
-
-    h4 {
-        color: rgb(16, 115, 160);
-        margin-top: 2rem;
-        margin-bottom: 0.8rem;
-    }
-
-    h5 {
-        color: #2c2c2c;
-        margin-top: 1.5rem;
-        margin-bottom: 0.5rem;
-        font-size: 1rem;
-        font-weight: 600;
-    }
-
     .toc hr {
       border: none;
       border-top: 2px solid #e0e0e0;
@@ -234,33 +172,12 @@
       background-color: #f8f9fa;
     }
 
-    .figure {
-        margin: 2rem 0;
-        text-align: center;
-    }
-
-    .figure img {
-        max-width: 100%;
-        width: 100%;
-        height: auto;
-        border-radius: 6px;
-    }
-
-    .figure caption,
-    .figure figcaption {
-        display: block;
-        margin-top: 0.5rem;
-        font-size: 0.9rem;
-        color: rgb(102, 102, 102);
-    }
-
     /* Hide TOC on small screens */
     @media (max-width: 1100px) {
     .toc {
         display: none;
     }
     }
-
 
   </style>
 </head>
@@ -284,28 +201,19 @@
   <h3>Overview</h3>
 
   <p>
-    This is the comprehensive code documentation for the Edge Path Bundling project, which implements the edge bundling algorithm described 
-    in "Edge-Path Bundling: A Less Ambiguous Edge Bundling Approach" by Wallinger et al. (2021). Our implementation provides a complete
-    Python framework for graph visualization with edge bundling capabilities, featuring interactive exploration tools and multi-dataset support.
+    This is the code documentation for the Edge Path Bundling project, which implements the edge bundling algorithm described 
+    in "Edge-Path Bundling: A Less Ambiguous Edge Bundling Approach" by Wallinger et al. The implementation includes a complete
+    Python codebase with interactive visualization capabilities.
   </p>
 
   <p>
-    EPB addresses the critical challenge of visual clutter in network visualizations by grouping related edges into 
-    smooth, bundled paths while preserving the underlying network structure. Unlike traditional edge bundling approaches that can 
-    introduce visual ambiguity, this implementation maintains topological correctness through careful path selection and distortion control.
+    The project is organized into several main components: core bundling algorithm implementation, data loading modules for different
+    dataset types, dashboard application for interactive exploration, and visualization rendering with Plotly. The <code>data</code> folder
+    contains three datasets (air traffic, brain connectivity, migration flows), while the <code>documentation</code> folder includes 
+    this code documentation along with project documentation and demo materials.
   </p>
 
   <h4>Project Structure</h4>
-  <p>
-    The project follows a modular architecture with clear separation of concerns across four main packages:
-  </p>
-  <ul>
-    <li><strong>Core Algorithm</strong> (<code>src/core/</code>) - Implementation of the edge path bundling algorithm with spatial distance calculations</li>
-    <li><strong>Data Loading</strong> (<code>src/data_loader/</code>) - Specialized loaders for different network dataset formats</li>
-    <li><strong>Visualization Engine</strong> (<code>src/visualization/</code>) - Plotly-based rendering with Bézier curve generation and multi-dimensional support</li>
-    <li><strong>Interactive Dashboard</strong> (<code>src/dashboard/</code>) - Web-based interface for parameter exploration and real-time visualization</li>
-  </ul>
-
   <table>
     <thead>
       <tr>
@@ -342,19 +250,6 @@
         <td>US county migration flows data loader</td>
       </tr>
       <tr>
-        <td rowspan="3">src/visualization</td>
-        <td>__init__.py</td>
-        <td>Package initialization</td>
-      </tr>
-      <tr>
-        <td><a href="#curves">curves.py</a></td>
-        <td>Bézier curve generation and path smoothing utilities</td>
-      </tr>
-      <tr>
-        <td><a href="#plotly_renderer">plotly_renderer.py</a></td>
-        <td>Plotly-based network visualization renderer</td>
-      </tr>
-      <tr>
         <td rowspan="2">src/dashboard</td>
         <td><a href="#app">app.py</a></td>
         <td>Interactive Dash web application</td>
@@ -363,105 +258,53 @@
         <td>static/</td>
         <td>Static assets (logos, CSS)</td>
       </tr>
+      <tr>
+        <td rowspan="3">src/visualization</td>
+        <td>__init__.py</td>
+        <td>Package initialization</td>
+      </tr>
+      <tr>
+        <td>curves.py</td>
+        <td>B�zier curve generation utilities</td>
+      </tr>
+      <tr>
+        <td><a href="#plotly_renderer">plotly_renderer.py</a></td>
+        <td>Plotly-based network visualization renderer</td>
+      </tr>
     </tbody>
   </table>
 
 </section>
 
 <section id="bundling">
-  <h3>bundling.py - Core Algorithm Implementation</h3>
+  <h3>bundling.py</h3>
 
   <p>
-    This module contains the heart of our edge path bundling system, implementing Algorithm 1 from Wallinger et al.'s paper 
-    with additional optimizations for real-world graph processing. The implementation carefully balances computational efficiency 
-    with visual quality, providing robust handling of diverse network topologies and coordinate systems. 
+    The core implementation of the Edge-Path Bundling algorithm following Algorithm 1 from the paper by Wallinger et al. 
+    This module provides the main bundling functionality that processes graphs to create bundled edge paths while maintaining 
+    a maximum distortion threshold.
   </p>
 
-  <div class="algorithm-box">
-    <h5>Edge Path Bundling Algorithm Overview</h5>
-    <p>
-      The core algorithm processes edges in weight-descending order, attempting to route each edge through existing bundled paths 
-      while respecting a maximum distortion threshold <em>k</em>. The approach ensures that bundled paths remain meaningful 
-      representations of the underlying network topology.
-    </p>
-  </div>
+  <h4>Key Functions</h4>
+  <ul>
+    <li><strong>bundle_edges(graph, k, d)</strong> - Main algorithm implementation that processes edges in weight order and finds shortest paths for bundling</li>
+    <li><strong>create_graph(nodes, edges, distance_type)</strong> - Creates a NetworkX DiGraph from node/edge data with spatial attributes</li>
+    <li><strong>haversine_distance(lat1, lon1, lat2, lon2)</strong> - Calculates great circle distance for geographic coordinates</li>
+    <li><strong>euclidean_distance(x1, y1, x2, y2, z1, z2)</strong> - Calculates Euclidean distance in 2D or 3D space</li>
+    <li><strong>dijkstra_with_skip(graph, source, target)</strong> - Modified Dijkstra's algorithm that excludes locked edges</li>
+  </ul>
+
+  <h4>Algorithm Parameters</h4>
+  <ul>
+    <li><strong>k (distortion threshold)</strong> - Maximum allowed detour ratio (path length / direct distance)</li>
+    <li><strong>d (edge weight factor)</strong> - Exponent for edge length weighting (weight = length^d)</li>
+  </ul>
 
   <p>
-    The following image shows the EPB algorithm that Wallinger et. al. proposed in their paper. The implementation was close to 
-    straight forward with adding some helper functions for a cleaner code. 
+    The algorithm sorts edges by weight (heaviest first), then for each edge attempts to find a shortest path while excluding 
+    previously bundled edges. If the path's detour ratio is within the threshold k, the path is accepted and its edges are locked.
+    Performance optimizations include early stopping and edge limits for large graphs.
   </p>
-
-  <figure class="figure">
-    <img src="images/epb_algorithm.png" alt="Algorithm 1" style="width:50%">
-    <figcaption>Edge-Path Bundling Algorithm proposed by Wallinger et. al..</figcaption>
-  </figure>
-
-
-
-  <h4>Core Functions</h4>
-
-  <h5>create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str) → nx.DiGraph</h5>
-  <div class="code-example">
-    <p><strong>Graph construction utility</strong> that builds NetworkX graphs from raw coordinate data.</p>
-    <ul>
-      <li>Supports both 2D and 3D coordinate systems</li>
-      <li>Automatically calculates spatial edge weights using specified distance metric</li>
-      <li>Handles missing or invalid coordinate data gracefully</li>
-      <li>Preserves original node metadata for visualization purposes</li>
-    </ul>
-  </div>
-
-
-  <h5>bundle_edges(graph: nx.DiGraph, k: float, d: float) → Dict</h5>
-  <div class="code-example">
-    <p><strong>Main algorithm orchestrator</strong> that implements the complete edge path bundling workflow.</p>
-    <ul>
-      <li><strong>Input:</strong> NetworkX directed graph with spatial node coordinates</li>
-      <li><strong>Parameters:</strong> k (distortion threshold), d (edge weight exponent)</li>
-      <li><strong>Returns:</strong> Dictionary mapping original edges to bundled path sequences</li>
-    </ul>
-    <p>Although this algorithm treates k and d as floats they should not be any number. Since 
-      d is a factor it makes sense to treat it as integer. Through the experiments that were conducted in the original 
-      paper d should be in the set {1,2,3}. A maximum distortion factor k above 3 does not change the outcome much. 
-      Our interactive dashboard takes those observations into account, therefore 
-      both only range from 1 till 3 with k also considering decimal numbers.
-    </p>
-  </div>
-
-  <h4>Distance Calculation Functions</h4>
-
-  <h5>haversine_distance(lat1, lon1, lat2, lon2) → float</h5>
-  <div class="code-example">
-    <p><strong>Great circle distance</strong> calculation for geographic coordinates using the Haversine formula.</p>
-    <pre>distance = 2R × arcsin(√(sin²(Δφ/2) + cos φ₁ × cos φ₂ × sin²(Δλ/2)))</pre>
-    <p>Used for any lat/lon coordinate systems. In our case air traffic and migration networks. The radius R is for us 
-      the radius of the earth 6371.0km. 
-    </p>
-  </div>
-
-  <h5>euclidean_distance(x1, y1, x2, y2, z1=None, z2=None) → float</h5>
-  <div class="code-example">
-    <p><strong>Euclidean distance</strong> in 2D or 3D space with optional z-coordinate support. Following formular 
-    shows how to compute the euclidean distance between three dimensional nodes.</p>
-    <pre class="formula">
-    distance =√((x<sub>2</sub> − x<sub>1</sub>)<sup>2</sup>+ (y<sub>2</sub> − y<sub>1</sub>)<sup>2</sup>+ (z<sub>2</sub> − z<sub>1</sub>)<sup>2</sup>)
-  </pre>
-  </div>
-
-  <h4>Pathfinding Implementation</h4>
-
-  <h5>dijkstra_with_skip(graph, source, target, locked_edges) → List</h5>
-  <div class="code-example">
-    <p><strong>Modified Dijkstra's algorithm</strong> that respects edge locking for bundle construction.</p>
-    <ul>
-      <li>Excludes previously locked edges from path consideration</li>
-      <li>Returns shortest available path or None if no valid path exists</li>
-      <li>Optimized for repeated calls on dynamically changing edge availability</li>
-      <li>Maintains NetworkX compatibility for easy integration</li>
-    </ul>
-  </div>
-
-
 
 </section>
 
@@ -496,13 +339,48 @@
 
 </section>
 
+<section id="app">
+  <h3>app.py</h3>
+
+  <p>
+    Interactive Dash web application that provides a user interface for exploring edge path bundling on different datasets.
+    Features parameter controls, real-time visualization updates, and performance optimizations including caching and
+    progressive loading.
+  </p>
+
+  <h4>Key Features</h4>
+  <ul>
+    <li><strong>Parameter Controls</strong> - Sliders for bundling factor (k), edge weight factor (d), and smoothing level</li>
+    <li><strong>Dataset Selection</strong> - Dropdown for switching between brain, air traffic, and migration datasets</li>
+    <li><strong>Visualization Options</strong> - Toggle between highlighted and normal coloring for bundled edges</li>
+    <li><strong>Performance Optimization</strong> - Caching system for datasets and bundling results</li>
+    <li><strong>Responsive Design</strong> - Academic-styled interface with sidebar controls and main visualization area</li>
+  </ul>
+
+  <h4>Callback Architecture</h4>
+  <p>
+    Uses Dash callbacks for reactive updates: parameter displays update immediately, dataset changes reset controls,
+    bundling recalculation occurs for algorithm parameters, and fast updates for visualization-only changes.
+    Implements smart caching to avoid redundant computations.
+  </p>
+
+  <h4>Performance Constants</h4>
+  <ul>
+    <li>Major airports limited to 50 for demonstration</li>
+    <li>Migration data filtered to top 100 counties</li>
+    <li>Minimum flow threshold of 3,000 for migration data</li>
+    <li>Fixed curve sampling at 80 points for smooth rendering</li>
+  </ul>
+
+</section>
 
 <section id="plotly_renderer">
   <h3>plotly_renderer.py</h3>
 
   <p>
     Comprehensive visualization module that renders bundled graphs using Plotly with support for 2D geographic maps,
-    3D brain visualizations, and smooth Bèzier curve generation. 
+    3D brain visualizations, and smooth B�zier curve generation. Automatically detects data types and applies
+    appropriate rendering strategies.
   </p>
 
   <h4>Visualization Types</h4>
@@ -514,156 +392,23 @@
 
   <h4>Curve Generation</h4>
   <p>
-    Implements smooth Bèzier curve generation using recursive subdivision and De Casteljau's algorithm.
+    Implements smooth B�zier curve generation using recursive subdivision and De Casteljau's algorithm.
     Supports configurable smoothing levels (adding control points) and sampling resolution.
     Works in both 2D and 3D coordinate systems for consistent curve appearance.
   </p>
 
-
-</section>
-
-<section id="curves">
-  <h3>curves.py - Bézier Curve Generation</h3>
-
-  <p>
-    Dedicated module for smooth curve generation following the paper's approach to path visualization. 
-    Implements advanced Bézier curve mathematics with recursive smoothing algorithms to create visually 
-    appealing bundled edge representations while maintaining mathematical precision.
-  </p>
-
-  
-  <p>A Bézier curve is a type of parametric smooth curve defined by a set of control points P₀, P₁, ..., Pₙ.</p>
-  <pre>B(t) = Σᵢ₌₀ⁿ (n choose i) × (1-t)ⁿ⁻ⁱ × tⁱ × Pᵢ</pre>
-  <p>Where t ∈ [0,1] parameterizes the curve from start to end.</p>
- 
-
-  <figure class="figure">
-    <img src="images/bezier_curve.png" alt="Bezier curve" style="width:50%">
-    <figcaption>Cubic Bèzier curve with four control points.</figcaption>
-  </figure>
-
-
-  <div class="algorithm-box">
-    <h5>Curve Generation Pipeline</h5>
-    <ol>
-      <li><strong>Control Point Extraction:</strong> Extract spatial coordinates from bundled path nodes</li>
-      <li><strong>Recursive Smoothing:</strong> Apply iterative midpoint insertion for smoother curves</li>
-      <li><strong>Bézier Interpolation:</strong> Generate smooth curves using De Casteljau's algorithm</li>
-      <li><strong>Adaptive Sampling:</strong> Create optimal point density for rendering</li>
-    </ol>
-  </div>
-
-  <h4>Core Functions</h4>
-
-  <h5>generate_control_points(path_nodes, node_positions, smoothing_level=2) → List[np.ndarray]</h5>
-  <div class="code-example">
-    <p><strong>Control point generator</strong> that converts bundled paths into smooth curve control points.</p>
-    <ul>
-      <li><strong>Input:</strong> Node sequence from bundled path, coordinate mapping</li>
-      <li><strong>Process:</strong> Extracts coordinates and applies recursive smoothing</li>
-      <li><strong>Returns:</strong> Array of control points suitable for Bézier interpolation</li>
-    </ul>
-  </div>
-
-  <h5>apply_recursive_smoothing(points, smoothing_level) → List[np.ndarray]</h5>
-  <div class="code-example">
-    <p><strong>Recursive smoothing algorithm</strong> implementing the paper's approach for curve refinement.</p>
-    <ul>
-      <li>Iteratively inserts midpoints between existing control points</li>
-      <li>Each iteration doubles the control point density</li>
-      <li>Maintains curve continuity while increasing smoothness</li>
-      <li>Configurable smoothing levels for different quality requirements</li>
-    </ul>
-  </div>
-
-  <h5>generate_bezier_curve(control_points, num_samples=100) → np.ndarray</h5>
-  <div class="code-example">
-    <p><strong>Bézier curve interpolation</strong> using De Casteljau's algorithm for numerical stability.</p>
-    <ul>
-      <li>Supports arbitrary-degree Bézier curves based on control point count</li>
-      <li>Configurable sampling density for different rendering requirements</li>
-      <li>Handles both 2D and 3D coordinate systems seamlessly</li>
-      <li>Optimized for real-time interactive applications</li>
-    </ul>
-  </div>
-
-  
-
-  <h5>bezier_point(control_points, t) → np.ndarray</h5>
-  <div class="code-example">
-    <p><strong>Single point evaluation</strong> on Bézier curve using De Casteljau's algorithm.</p>
-    <ul>
-      <li>Numerically stable recursive evaluation</li>
-      <li>Handles edge cases (t=0, t=1) correctly</li>
-      <li>Linear time complexity O(n) for n control points</li>
-      <li>Used internally by curve sampling functions</li>
-    </ul>
-  </div>
-
-  <h4>3D Curve Support</h4>
-
-  <h5>generate_3d_control_points(path_nodes, node_positions, smoothing_level=2) → List[np.ndarray]</h5>
-  <div class="code-example">
-    <p><strong>3D curve generation</strong> specifically designed for brain connectivity visualization.</p>
-    <ul>
-      <li>Handles x, y, z coordinate extraction from 3D node positions</li>
-      <li>Maintains spatial relationships in 3D space</li>
-      <li>Compatible with MNI coordinate systems used in neuroimaging</li>
-      <li>Supports interactive 3D visualization with Plotly</li>
-    </ul>
-  </div>
-
-
-  <p>One note to add is that higher smoothing levels and sample counts improve visual quality but increase computational cost which is problematic for real-time viusalizations. 
-  A recommended setting would be smoothing_level=2, num_samples=80 for good balance of quality and performance. Also the original paper sticked to 2 for the smoothing parameter, 
-  however, we wanted the user to experience the differences it can make.</p>
-  
-
-</section>
-
-<section id="app">
-  <h3>app.py</h3>
-
-  <p>
-    Interactive Dash web application that provides a user interface for exploring edge path bundling on different datasets.
-    Features parameter controls and real-time visualization updates.
-  </p>
-
-  <h4>Key Features</h4>
+  <h4>Performance Features</h4>
   <ul>
-    <li><strong>Parameter Controls</strong> - Sliders for maximum distortion threshold (k) and edge weight factor (d).</li>
-    <li><strong>Dataset Selection</strong> - Dropdown for switching between brain, air traffic, and migration datasets.</li>
-    <li><strong>Visualization Options</strong> - Slider for smoothing parameter for the Bèzier curves as well as options to 
-      highlight bundled edges either through color or thickness.</li>
-    <li><strong>Statistics</strong> - Number of edges of the selected network, number of bundled edges and percentage of how 
-      many edges were bundled. Also when hovering over a bundled edge the detour ratio as well as its control points become visible.</li>
-    
+    <li>Automatic edge limiting for dense networks (500-1000 edges)</li>
+    <li>Color scheme optimization for different visualization contexts</li>
+    <li>Hover information with path details and distortion ratios</li>
+    <li>Responsive layout configuration for different screen sizes</li>
   </ul>
 
-  <figure class="figure">
-    <img src="images/image2.png" alt="User Interface" style="width:100%">
-  </figure>
-
-  <h4>Callback Architecture</h4>
   <p>
-    Uses Dash callbacks for reactive updates: parameter displays update immediately, dataset changes reset controls,
-    bundling recalculation occurs for algorithm parameters, and updates for visualization-only changes.
+    The module uses explicit dataset type detection for faster rendering, falling back to automatic detection
+    for backward compatibility. Geographic data detection uses coordinate range validation and spread analysis.
   </p>
-
-  <figure class="figure">
-    <img src="images/callback_update_graph.png" alt="Callback" style="width:80%">
-    <figcaption>Snippet of callback when either dataset, maximum distortion threshold k or edge weight factor d is being changed. </figcaption>
-  </figure>
-
-  <h4>Performance Constants</h4>
-  <p>Since the algorithm takes some time due to the frequent calling of the Dijkstra's algorithm as well as does the visualization 
-    take some time with a high smoothing parameter, we needed to add some limitations on the data.</p>
-  <ul>
-    <li>Major airports limited to 50</li>
-    <li>Migration data filtered to top 100 counties</li>
-    <li>Minimum flow threshold of 3,000 for migration data</li>
-    <li>Fixed curve sampling at 80 points for smooth rendering</li>
-  </ul>
 
 </section>
 
@@ -674,14 +419,13 @@
     <a href="#overview">Overview</a>
     <a href="#bundling">bundling.py</a>
     <a href="#data_loader">data_loader</a>
-    <a href="#curves">curves.py</a>
     <a href="#app">app.py</a>
     <a href="#plotly_renderer">plotly_renderer.py</a>
 
     <hr>
 
-    <a class="toc-link" href="./demo.html" target="_blank">Demo</a> 
-    <a class="toc-link" href="./documentation.html">Home</a>
+    <a class="toc-link" href="images/demo.mov" target="_blank">Demo</a>
+    <a class="toc-link" href="documentation.html">Home</a>
     <a class="toc-link" href="https://github.com/claraelisabeth/Visualization-193.166" target="_blank">
         Source Code
     </a>
