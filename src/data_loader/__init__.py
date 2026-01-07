@@ -8,12 +8,11 @@ This module provides loaders for the three main datasets used in our study:
 """
 
 from .air_traffic import load_air_traffic_data
-from .migration import load_migration_json, load_outflow_data
+from .migration import load_outflow_data
 from .brain_connectivity import load_brain_graphml
 
 __all__ = [
     'load_air_traffic_data',
-    'load_migration_json',
     'load_outflow_data',
     'load_brain_graphml'
 ]

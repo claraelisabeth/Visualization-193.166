@@ -10,58 +10,12 @@ County coordinates can be loaded from separate county centroids file.
 
 import pandas as pd
 import networkx as nx
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, Optional
 import logging
-import json
 from ..core.bundling import create_graph
 
 logger = logging.getLogger(__name__)
 
-
-
-
-
-
-def load_migration_json(json_file: str) -> Optional[nx.DiGraph]:
-    """
-    Load migration data from JSON format (as referenced in original paper).
-    
-    Expected format: {"nodes": [...], "links": [...]}
-    
-    Args:
-        json_file: Path to migration JSON file
-        
-    Returns:
-        NetworkX DiGraph
-    """
-    try:
-        with open(json_file, 'r') as f:
-            data = json.load(f)
-        
-        # Extract nodes
-        nodes = []
-        for node in data.get('nodes', []):
-            nodes.append({
-                'id': node['id'],
-                'name': node.get('name', f"Node {node['id']}"),
-                'x': node['x'],
-                'y': node['y']
-            })
-        
-        # Extract edges
-        edges = []
-        for link in data.get('links', []):
-            edges.append((link['source'], link['target']))
-        
-        # Create graph
-        graph = create_graph(nodes, edges, distance_type='euclidean')
-        
-        logger.info(f"Loaded migration JSON: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
-        return graph
-        
-    except Exception as e:
-        logger.error(f"Error loading migration JSON: {e}")
-        return None
 
 
 def load_outflow_data(outflow_file: str, min_flow_threshold: int = 100, distance: str = 'haversine') -> Optional[nx.DiGraph]:
@@ -121,7 +75,6 @@ def _create_us_county_coordinates(county_fips: set) -> Dict:
     Uses state-level positioning with random offsets for counties.
     """
     import random
-    import math
     
     # Basic state positions (approximate center coordinates)
     state_coords = {

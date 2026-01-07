@@ -5,18 +5,11 @@ Interactive Dash application for exploring edge path bundling on different datas
 Supports 2D visualization with parameter controls for bundling factor and dataset selection.
 """
 
-from dash import Dash, html, dcc, callback, Output, Input
-import dash_bootstrap_components as dbc
-import plotly.express as px
-import plotly.graph_objects as go
-import pandas as pd
-import numpy as np
+from dash import Dash, html, dcc, Output, Input
 
-# Import our bundling implementation
 from pathlib import Path
 from ..core.bundling import bundle_edges, create_graph
 from ..data_loader import (
-    load_migration_json,
     load_air_traffic_data
 )
 from ..data_loader.brain_connectivity import load_brain_graphml
@@ -436,7 +429,7 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, 
             title = f"Brain Connectivity Network (HCP Subject 996782, {graph.number_of_nodes()} regions)"
         else:
             # Return error if brain data fails to load
-            return None, "❌ Brain data failed to load"
+            return None, "Brain data failed to load"
     elif dataset == 'air_traffic':
         # Load real OpenFlights data (subset for performance)
         airports_file = "data/air_traffic/airports.dat"
@@ -446,7 +439,7 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, 
             # Fallback to demo data if loading fails
             graph = _create_air_traffic_demo()
             title = "Air Traffic Network (Demo - file load failed)"
-            status_msg = "⚠ Air traffic data failed, using demo data"
+            status_msg = "Air traffic data failed, using demo data"
         else:
             title = f"Air Traffic Network ({graph.number_of_nodes()} major airports)"
     else:  # migration
@@ -457,7 +450,7 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, 
             # Fallback to demo data if loading fails
             graph = _create_migration_demo()
             title = "Migration Flows (Demo - file load failed)"
-            status_msg = "⚠ Migration data failed, using demo data"
+            status_msg = "Migration data failed, using demo data"
         else:
             title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
     
