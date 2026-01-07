@@ -16,109 +16,12 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 import logging
 from pathlib import Path
-# Import create_graph at module level
-from ..core.bundling import create_graph
 
 logger = logging.getLogger(__name__)
 
 
-def load_brain_nodes(nodes_file: str) -> Dict:
-    """
-    Load brain region nodes with 3D coordinates.
-    
-    Expected format: CSV with columns [node_id, x, y, z, region_name, hemisphere]
-    
-    Args:
-        nodes_file: Path to brain nodes file
-        
-    Returns:
-        Dictionary mapping node_id -> node info with 3D coordinates
-    """
-    try:
-        nodes_df = pd.read_csv(nodes_file)
-        
-        # Check required columns
-        required_cols = ['node_id', 'x', 'y', 'z']
-        if not all(col in nodes_df.columns for col in required_cols):
-            logger.error(f"Missing required columns. Expected: {required_cols}")
-            return {}
-        
-        nodes = {}
-        for _, row in nodes_df.iterrows():
-            try:
-                node_id = int(row['node_id']) if pd.notna(row['node_id']) else None
-                if node_id is None:
-                    continue
-                    
-                nodes[node_id] = {
-                    'id': node_id,
-                    'name': row.get('region_name', f'Region {node_id}'),
-                    'x': float(row['x']),
-                    'y': float(row['y']),
-                    'z': float(row['z']),
-                    'hemisphere': row.get('hemisphere', 'unknown')
-                }
-            except (ValueError, TypeError) as e:
-                logger.debug(f"Skipping invalid node data: {e}")
-                continue
-                
-        logger.info(f"Loaded {len(nodes)} brain regions")
-        return nodes
-        
-    except Exception as e:
-        logger.error(f"Error loading brain nodes: {e}")
-        return {}
 
 
-def load_brain_connections(connections_file: str, nodes: Dict,
-                          strength_threshold: float = 0.1) -> List[Tuple[int, int]]:
-    """
-    Load brain connectivity data.
-    
-    Expected format: CSV with source_node, target_node, connection_strength
-    
-    Args:
-        connections_file: Path to brain connections file
-        nodes: Dictionary of brain node data
-        strength_threshold: Minimum connection strength to include
-        
-    Returns:
-        List of (source_node, target_node) tuples
-    """
-    try:
-        connections_df = pd.read_csv(connections_file)
-        
-        # Check required columns
-        required_cols = ['source_node', 'target_node', 'connection_strength']
-        if not all(col in connections_df.columns for col in required_cols):
-            logger.error(f"Missing required columns. Expected: {required_cols}")
-            return []
-        
-        # Filter connections above threshold
-        connections_df = connections_df[connections_df['connection_strength'] >= strength_threshold]
-        
-        # Extract valid connections
-        connections = []
-        node_ids = set(nodes.keys())
-        
-        for _, row in connections_df.iterrows():
-            try:
-                source = int(row['source_node'])
-                target = int(row['target_node'])
-                
-                # Only include connections between nodes we have coordinates for
-                if source in node_ids and target in node_ids and source != target:
-                    connections.append((source, target))
-                    
-            except (ValueError, TypeError):
-                continue
-                
-        logger.info(f"Loaded {len(connections)} brain connections (strength >= {strength_threshold})")
-        return connections
-        
-    except Exception as e:
-        logger.error(f"Error loading brain connections: {e}")
-        return []
 
 
 def load_brain_graphml(graphml_file: str) -> Optional[nx.DiGraph]:
@@ -198,49 +101,5 @@ def load_brain_graphml(graphml_file: str) -> Optional[nx.DiGraph]:
 
 
 
-def generate_synthetic_brain_data(num_regions: int = 100, connection_prob: float = 0.1) -> nx.DiGraph:
-    """
-    Generate synthetic 3D brain connectivity data for testing.
-    
-    Args:
-        num_regions: Number of brain regions
-        connection_prob: Probability of connection between regions
-        
-    Returns:
-        NetworkX DiGraph with synthetic brain data
-    """
-    # Generate random 3D coordinates (roughly brain-shaped)
-    np.random.seed(42)  # For reproducibility
-    
-    nodes = []
-    for i in range(num_regions):
-        # Generate coordinates roughly within brain volume
-        x = np.random.normal(0, 30)  # mm
-        y = np.random.normal(0, 40)
-        z = np.random.normal(0, 30)
-        
-        nodes.append({
-            'id': i,
-            'name': f'Region_{i}',
-            'x': x,
-            'y': y,
-            'z': z
-        })
-    
-    # Generate connections
-    connections = []
-    for i in range(num_regions):
-        for j in range(i + 1, num_regions):
-            if np.random.random() < connection_prob:
-                # Add bidirectional connections
-                connections.append((i, j))
-                connections.append((j, i))
-    
-    # Create graph
-    graph = create_graph(nodes, connections, distance_type='euclidean')
-    
-    logger.info(f"Generated synthetic brain data: {graph.number_of_nodes()} regions, {graph.number_of_edges()} connections")
-    
-    return graph
 
 
