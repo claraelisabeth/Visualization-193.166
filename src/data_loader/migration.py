@@ -18,99 +18,8 @@ from ..core.bundling import create_graph
 logger = logging.getLogger(__name__)
 
 
-def load_county_coordinates(counties_file: str) -> Dict:
-    """
-    Load county coordinate data.
-    
-    Expected format: CSV with columns [fips, county_name, state, latitude, longitude]
-    
-    Args:
-        counties_file: Path to county coordinates file
-        
-    Returns:
-        Dictionary mapping county_fips -> coordinate info
-    """
-    try:
-        counties_df = pd.read_csv(counties_file)
-        
-        # Ensure required columns exist
-        required_cols = ['fips', 'latitude', 'longitude']
-        if not all(col in counties_df.columns for col in required_cols):
-            logger.error(f"Missing required columns. Expected: {required_cols}")
-            return {}
-            
-        counties = {}
-        for _, row in counties_df.iterrows():
-            try:
-                fips = str(row['fips']).zfill(5)  # Ensure 5-digit FIPS code
-                counties[fips] = {
-                    'id': fips,
-                    'name': row.get('county_name', f'County {fips}'),
-                    'state': row.get('state', ''),
-                    'x': float(row['longitude']),
-                    'y': float(row['latitude'])
-                }
-            except (ValueError, TypeError) as e:
-                logger.debug(f"Skipping invalid county data: {e}")
-                continue
-                
-        logger.info(f"Loaded coordinates for {len(counties)} counties")
-        return counties
-        
-    except Exception as e:
-        logger.error(f"Error loading county coordinates: {e}")
-        return {}
 
 
-def load_migration_flows(flows_file: str, counties: Dict, 
-                        min_flow_threshold: int = 10) -> List[Tuple[str, str]]:
-    """
-    Load migration flow data.
-    
-    Expected format: CSV with origin_fips, dest_fips, flow_volume columns
-    
-    Args:
-        flows_file: Path to migration flows file
-        counties: Dictionary of county data
-        min_flow_threshold: Minimum flow volume to include
-        
-    Returns:
-        List of (origin_fips, dest_fips) tuples
-    """
-    try:
-        flows_df = pd.read_csv(flows_file)
-        
-        # Check for required columns
-        required_cols = ['origin_fips', 'dest_fips', 'flow_volume']
-        if not all(col in flows_df.columns for col in required_cols):
-            logger.error(f"Missing required columns. Expected: {required_cols}")
-            return []
-        
-        # Filter flows above threshold
-        flows_df = flows_df[flows_df['flow_volume'] >= min_flow_threshold]
-        
-        # Extract valid flows
-        flows = []
-        county_ids = set(counties.keys())
-        
-        for _, row in flows_df.iterrows():
-            try:
-                origin = str(row['origin_fips']).zfill(5)
-                dest = str(row['dest_fips']).zfill(5)
-                
-                # Only include flows between counties we have coordinates for
-                if origin in county_ids and dest in county_ids and origin != dest:
-                    flows.append((origin, dest))
-                    
-            except (ValueError, TypeError):
-                continue
-                
-        logger.info(f"Loaded {len(flows)} migration flows (threshold >= {min_flow_threshold})")
-        return flows
-        
-    except Exception as e:
-        logger.error(f"Error loading migration flows: {e}")
-        return []
 
 
 def load_migration_json(json_file: str) -> Optional[nx.DiGraph]:
@@ -291,49 +200,5 @@ def _create_us_county_coordinates(county_fips: set) -> Dict:
     return counties
 
 
-def load_migration_data(counties_file: str, flows_file: str, 
-                       min_flow_threshold: int = 10) -> Optional[nx.DiGraph]:
-    """
-    Load complete migration dataset and create NetworkX graph.
-    
-    Args:
-        counties_file: Path to county coordinates file
-        flows_file: Path to migration flows file
-        min_flow_threshold: Minimum flow volume to include
-        
-    Returns:
-        NetworkX DiGraph with county nodes and migration edges
-    """
-    # Load data
-    counties = load_county_coordinates(counties_file)
-    if not counties:
-        logger.error("No county coordinate data loaded")
-        return None
-        
-    flows = load_migration_flows(flows_file, counties, min_flow_threshold)
-    if not flows:
-        logger.error("No migration flow data loaded")
-        return None
-    
-    # Create NetworkX graph
-    
-    # Convert counties dict to list format
-    nodes = list(counties.values())
-    
-    graph = create_graph(nodes, flows, distance_type='euclidean')
-    
-    logger.info(f"Created migration graph: {graph.number_of_nodes()} counties, {graph.number_of_edges()} flows")
-    
-    return graph
 
 
-if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    
-    print("Migration Data Loader Test")
-    print("To test, place migration data files in data/migration/:")
-    print("- county_coordinates.csv (fips, county_name, state, latitude, longitude)")
-    print("- migration_flows.csv (origin_fips, dest_fips, flow_volume)")
-    print("OR")
-    print("- migrations.json (in paper's format)")

@@ -196,38 +196,6 @@ def load_brain_graphml(graphml_file: str) -> Optional[nx.DiGraph]:
         return None
 
 
-def load_brain_connectivity_data(nodes_file: str, connections_file: str,
-                                strength_threshold: float = 0.1) -> Optional[nx.DiGraph]:
-    """
-    Load complete brain connectivity dataset and create NetworkX graph.
-    
-    Args:
-        nodes_file: Path to brain nodes file
-        connections_file: Path to brain connections file
-        strength_threshold: Minimum connection strength to include
-        
-    Returns:
-        NetworkX DiGraph with brain regions and connections
-    """
-    # Load data
-    nodes = load_brain_nodes(nodes_file)
-    if not nodes:
-        logger.error("No brain node data loaded")
-        return None
-        
-    connections = load_brain_connections(connections_file, nodes, strength_threshold)
-    if not connections:
-        logger.error("No brain connection data loaded")
-        return None
-    
-    # Convert nodes dict to list format
-    node_list = list(nodes.values())
-    
-    graph = create_graph(node_list, connections, distance_type='euclidean')
-    
-    logger.info(f"Created brain graph: {graph.number_of_nodes()} regions, {graph.number_of_edges()} connections")
-    
-    return graph
 
 
 def generate_synthetic_brain_data(num_regions: int = 100, connection_prob: float = 0.1) -> nx.DiGraph:
@@ -276,18 +244,3 @@ def generate_synthetic_brain_data(num_regions: int = 100, connection_prob: float
     return graph
 
 
-if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    
-    print("Brain Connectivity Data Loader Test")
-    print("To test, place brain data files in data/brain_connectivity/:")
-    print("- brain_nodes.csv (node_id, x, y, z, region_name)")
-    print("- brain_connections.csv (source_node, target_node, connection_strength)")
-    print("OR")
-    print("- brain_network.graphml")
-    
-    # Generate synthetic data for testing
-    print("\nGenerating synthetic brain data for testing...")
-    synthetic_graph = generate_synthetic_brain_data(50, 0.05)
-    print(f"Synthetic brain network: {synthetic_graph.number_of_nodes()} regions, {synthetic_graph.number_of_edges()} connections")
