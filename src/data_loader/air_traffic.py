@@ -18,9 +18,7 @@ from pathlib import Path
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import sys
-sys.path.append(str(Path(__file__).parent.parent))
-from core.bundling import create_graph
+from ..core.bundling import create_graph
 
 
 def load_airports(airports_file: str) -> Dict:
