@@ -108,14 +108,21 @@ def _edge_weight_with_skip(_, __, edge_data):
 def dijkstra_with_skip(graph: nx.DiGraph, source, target) -> Optional[List]:
     """Find shortest path from source to target, excluding edges where skip=True"""
     try:
+        # Check if nodes exist in graph
+        if source not in graph or target not in graph:
+            return None
+        
         return nx.dijkstra_path(graph, source, target, weight=_edge_weight_with_skip)
-    except nx.NetworkXNoPath:
+    except (nx.NetworkXNoPath, nx.NodeNotFound, KeyError):
+        return None
+    except Exception as e:
+        print(f"Error in dijkstra_with_skip: {e}, source: {source}, target: {target}")
         return None
 
 
 def calculate_path_length(graph: nx.DiGraph, path: List[int]) -> float:
     """
-    Calculate the total length of a path through the graph.
+    Calculate the total length of a path through the graph (optimized).
     
     Args:
         graph: NetworkX DiGraph with edge 'length' attributes
@@ -127,20 +134,21 @@ def calculate_path_length(graph: nx.DiGraph, path: List[int]) -> float:
     if len(path) < 2:
         return 0.0
     
+    # Fast path calculation - avoid .get() calls
     total_length = 0.0
+    edges = graph.edges
     for i in range(len(path) - 1):
         u, v = path[i], path[i + 1]
-        edge_data = graph.edges.get((u, v))
-        if edge_data:
-            total_length += edge_data['length']
-        else:
+        try:
+            total_length += edges[u, v]['length']
+        except KeyError:
             # This shouldn't happen if path is valid
             return float('inf')
     
     return total_length
 
 
-def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
+def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0, max_edges: int = 500, early_stop: int = 50) -> Dict:
     """
     Algorithm 1: Edge-Path Bundling Algorithm
     
@@ -151,6 +159,8 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
         graph: NetworkX DiGraph with initialized edge attributes (length, locked, skip)
         k: Maximum distortion (detour ratio)
         d: Edge weight factor (from slider)
+        max_edges: Maximum number of edges to process (performance limit)
+        early_stop: Stop after this many consecutive failed bundles
     
     Returns:
         Dict with bundled paths and control points
@@ -162,20 +172,35 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
     
     sorted_edges = sort_edges(graph)
     
-    # Main loop
+    # Main loop with performance optimizations
+    consecutive_failures = 0
+    processed_edges = 0
+    
     for i, (source, target) in enumerate(sorted_edges):
+        # Performance limits
+        if processed_edges >= max_edges:
+            break
+        if consecutive_failures >= early_stop:
+            break
+            
+        # Check if edge exists (safety check)
+        if not graph.has_edge(source, target):
+            continue
+            
         edge_data = graph.edges[source, target]
         
         # if lock(e) then continue
         if edge_data['locked']:
             continue
             
+        processed_edges += 1
         edge_data['skip'] = True
         
         p = dijkstra_with_skip(graph, source, target)
         
         if p is None:
             edge_data['skip'] = False
+            consecutive_failures += 1
             continue
         
         # Calculate detour ratio and check maximum distortion
@@ -185,7 +210,11 @@ def bundle_edges(graph: nx.DiGraph, k: float = 2.0, d: float = 1.0) -> Dict:
         
         if detour_ratio > k:
             edge_data['skip'] = False
+            consecutive_failures += 1
             continue
+        
+        # Reset failure counter on success
+        consecutive_failures = 0
         
         # Bundle successful - lock path edges and store result
         for j in range(len(p) - 1):
