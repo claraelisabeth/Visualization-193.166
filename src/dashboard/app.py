@@ -188,7 +188,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                 ]),
                 
                 # d parameter
-                html.Div(children=[
+                html.Div(id='edge-weight-controls', children=[
                     html.Div(style={'display': 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '8px'}, children=[
                         html.Label("Edge Weight Factor (d)", style={
                             'color': TEXT_PRIMARY,
@@ -240,7 +240,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                     'font-weight': '600'
                 }),
                 
-                html.Div(children=[
+                html.Div(id='smoothing-controls', children=[
                     html.Div(style={'display': 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '8px'}, children=[
                         html.Label("Smoothing Level", style={
                             'color': TEXT_PRIMARY,
@@ -274,7 +274,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                 ]),
                 
                 # Bundled edge color toggle
-                html.Div(style={'margin-top': '16px'}, children=[
+                html.Div(id='color-controls', style={'margin-top': '16px'}, children=[
                     html.Label("Bundled Edge Color", style={
                         'color': TEXT_PRIMARY,
                         'font-size': '13px',
@@ -300,7 +300,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                 ]),
                 
                 # Bundled edge thickness toggle
-                html.Div(style={'margin-top': '16px'}, children=[
+                html.Div(id='thickness-controls', style={'margin-top': '16px'}, children=[
                     html.Label("Bundled Edge Thickness", style={
                         'color': TEXT_PRIMARY,
                         'font-size': '13px',
@@ -416,6 +416,72 @@ def update_edge_weight_display(value):
 )
 def update_smoothing_level_display(value):
     return f"Level = {value}"
+
+# Enable/disable controls based on k value
+@app.callback(
+    [Output('edge-weight-controls', 'style'),
+     Output('smoothing-controls', 'style'),
+     Output('color-controls', 'style'), 
+     Output('thickness-controls', 'style'),
+     Output('edge-weight-slider', 'disabled'),
+     Output('smoothing-level-slider', 'disabled'),
+     Output('edge-color-toggle', 'style', allow_duplicate=True),
+     Output('edge-thickness-toggle', 'style', allow_duplicate=True)],
+    Input('bundling-factor-slider', 'value'),
+    prevent_initial_call='initial_duplicate'  # Allow initial call to handle first visit
+)
+def toggle_visualization_controls(bundling_factor):
+    """Enable/disable visualization controls based on bundling factor (k)."""
+    # Handle None case on initial load
+    if bundling_factor is None:
+        bundling_factor = DEFAULT_BUNDLING_FACTOR
+        
+    is_disabled = bundling_factor == 1.0
+    
+    # Base styles for the containers
+    base_container_style = {'margin-bottom': '16px'}  # edge-weight uses margin-bottom
+    base_viz_container_style = {'margin-top': '16px'}  # viz controls use margin-top
+    disabled_container_style = {
+        'margin-bottom': '16px', 
+        'opacity': '0.5', 
+        'pointer-events': 'none'
+    }
+    disabled_viz_container_style = {
+        'margin-top': '16px', 
+        'opacity': '0.5', 
+        'pointer-events': 'none'
+    }
+    
+    # Base styles for radio items
+    base_radio_style = {'color': TEXT_PRIMARY, 'font-size': '13px'}
+    disabled_radio_style = {
+        'color': TEXT_SECONDARY, 
+        'font-size': '13px', 
+        'opacity': '0.6'
+    }
+    
+    if is_disabled:
+        return (
+            disabled_container_style,      # edge-weight-controls
+            disabled_viz_container_style,  # smoothing-controls
+            disabled_viz_container_style,  # color-controls  
+            disabled_viz_container_style,  # thickness-controls
+            True,  # edge-weight-slider disabled
+            True,  # smoothing-level-slider disabled
+            disabled_radio_style,  # edge-color-toggle
+            disabled_radio_style   # edge-thickness-toggle
+        )
+    else:
+        return (
+            base_container_style,      # edge-weight-controls
+            base_viz_container_style,  # smoothing-controls
+            base_viz_container_style,  # color-controls
+            base_viz_container_style,  # thickness-controls
+            False,  # edge-weight-slider disabled
+            False,  # smoothing-level-slider disabled
+            base_radio_style,  # edge-color-toggle
+            base_radio_style   # edge-thickness-toggle
+        )
 
 
 # Reset sliders to default when dataset changes - also clear graph immediately
