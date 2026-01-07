@@ -24,18 +24,18 @@ from ..data_loader.brain_connectivity import load_brain_graphml
 from ..data_loader.migration import load_outflow_data
 from ..visualization import create_network_visualization
 
-# UI Colors
-even_lighter_beige = 'rgb(247, 242, 233)'
-light_beige = 'rgb(250, 240, 220)'
-beige = 'rgb(213, 184, 149)'
-brown = 'rgb(86, 56, 46)'
-light_brown = 'rgb(113, 80, 58)'
-light_green = 'rgb(168, 203, 160)'
-green = 'rgb(78, 110, 77)'
+# UI Colors - Academic theme
+BACKGROUND = '#fafafa'
+CARD_BG = '#ffffff'
+TEXT_PRIMARY = '#2c3e50'
+TEXT_SECONDARY = '#7f8c8d'
+ACCENT = '#2980b9'
+BORDER = '#e1e8ed'
+HEADER_BG = '#34495e'
 
 # Default parameters
 DEFAULT_BUNDLING_FACTOR = 1.0  # k parameter - maximum detour ratio
-DEFAULT_EDGE_WEIGHT_FACTOR = 1.0  # d parameter - edge weight factor
+DEFAULT_EDGE_WEIGHT_FACTOR = 2.0  # d parameter - edge weight factor
 DEFAULT_SMOOTHING_LEVEL = 2  # Bézier smoothing level
 DEFAULT_DATASET = 'Brain (Synthetic)'
 
@@ -46,141 +46,272 @@ FIXED_NUM_SAMPLES = 80  # Good balance of smoothness vs performance
 assets_path = Path(__file__).parent / 'static'
 app = Dash(__name__, assets_folder=str(assets_path))
 
-# App layout - Side by side layout
-app.layout = html.Div([
+# App layout - Academic dashboard
+app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-serif', 'background': BACKGROUND, 'min-height': '100vh'}, children=[
+    # Header
     html.Div([
-        # Title and Logo
-        html.Div("Edge Path Bundling", id='title'),
-        html.Div("Clara Pichler and Paul Schmitt", id='user-name'),
-        html.Img(src='/assets/TUlogo.png',
-                 id='racoon-logo', height='60px', width='60px'),
-    ], id='header', style={'display': 'flex', 'align-items': 'center'}),
-
-    html.Div(className='overview-box', children=[
-        html.Div(id='overview-text', children=[
-            html.H4("Edge Path Bundling Visualization", style={'margin-bottom': '10px'}),
-            html.P([
-                "Interactive dashboard for the edge path bundling algorithm. ",
-                "Reduces visual clutter by bundling edges through existing network paths."
-            ], style={'margin-bottom': '8px', 'font-size': '14px'}),
-            html.P([
-                "Adjust parameters to see their effect on bundling behavior and visualization quality."
-            ], style={'margin-bottom': '0px', 'font-size': '14px'})
-        ])
-    ]),
-
-    html.Div(className='main-box', children=[
-       html.Div([
-           dcc.Loading(
-               id="loading-graph",
-               type="default",
-               children=[dcc.Graph(
-                   figure={}, 
-                   id='main-graph',
-                   style={'height': '75vh', 'width': '100%'}
-               )],
-               style={'padding': '15px'}
-           ),
-           html.Div(id='loading-status', style={
-               'text-align': 'center',
-               'margin': '10px 0',
-               'font-size': '16px',
-               'font-weight': 'bold',
-               'color': brown
-           }),
-           html.Div(id='graph-stats', style={
-               'text-align': 'center', 
-               'margin-top': '10px',
-               'font-size': '14px',
-               'color': green
-           })
-       ])
-    ]),
-
-    html.Div(id='change-parameters', className='parameter-box', children=[
-        html.Div(children="Parameter Control", 
-                 style={'color': green, 'font-size': '22px', 'padding':'15px', 'text-align': 'center'}),
-        
-        # Dataset Selection
+        html.Div("Edge Path Bundling", style={
+            'color': 'white',
+            'font-size': '18px',
+            'font-weight': '600'
+        }),
         html.Div([
-            html.Label("Dataset:", style={'color': brown, 'font-weight': 'bold', 'margin-bottom': '5px'}),
-            dcc.Dropdown(
-                id='dataset-dropdown',
-                options=[
-                    {'label': '🏘️ Migration', 'value': 'migration'},
-                    {'label': '✈️ Air Traffic', 'value': 'air_traffic'},
-                    {'label': '🧠 Brain Connectivity', 'value': 'brain'}
-                ],
-                value='migration',
-                placeholder="Select Dataset",
-                clearable=False,
-                style={'margin-bottom': '15px'}
-            )
-        ], style={'padding': '0 15px'}),
+            html.Span("Clara Pichler and Paul Schmitt", style={
+                'color': 'rgba(255,255,255,0.9)',
+                'font-size': '14px',
+                'margin-right': '12px'
+            }),
+            html.Img(src='/assets/TUlogo.png', height='32px', width='32px')
+        ], style={'display': 'flex', 'align-items': 'center'})
+    ], style={
+        'height': '56px',
+        'background': HEADER_BG,
+        'display': 'flex',
+        'justify-content': 'space-between',
+        'align-items': 'center',
+        'padding': '0 24px',
+        'box-shadow': '0 1px 3px rgba(0,0,0,0.1)'
+    }),
+
+    # Main content container with sidebar layout
+    html.Div(style={'display': 'flex', 'min-height': 'calc(100vh - 56px)'}, children=[
         
-        # Bundling Algorithm Section
-        html.Div([
-            html.H5("🔗 Bundling Algorithm", style={'color': green, 'margin': '10px 0 15px 0', 'font-size': '16px'}),
+        # Left sidebar - Controls
+        html.Div(style={
+            'width': '320px',
+            'background': CARD_BG,
+            'border-right': f'1px solid {BORDER}',
+            'padding': '24px 16px',
+            'overflow-y': 'auto'
+        }, children=[
             
-            # Bundling Factor Control (k parameter)
-            html.Div([
-                html.Label("Maximum Detour Ratio (k):", style={'color': brown, 'font-weight': 'bold', 'font-size': '14px'}),
-                html.Div(id='bundling-factor-display', style={'color': green, 'font-size': '16px', 'margin': '3px 0'}),
-                dcc.Slider(
-                    id='bundling-factor-slider',
-                    min=1.0,
-                    max=5.0,
-                    step=0.1,
-                    value=DEFAULT_BUNDLING_FACTOR,
-                    marks={i: str(i) for i in range(1, 6)},
-                    tooltip={"placement": "bottom", "always_visible": True}
-                ),
-                html.P("Lower = less bundling, higher = more bundling", 
-                       style={'font-size': '11px', 'color': light_brown, 'margin': '5px 0 15px 0'})
+            # Dataset Section
+            html.Div(style={
+                'background': CARD_BG,
+                'border': f'1px solid {BORDER}',
+                'border-radius': '12px',
+                'padding': '16px',
+                'margin-bottom': '16px'
+            }, children=[
+                html.H6("Dataset", style={
+                    'margin': '0 0 12px 0',
+                    'color': TEXT_PRIMARY,
+                    'font-size': '14px',
+                    'font-weight': '600'
+                }),
+                dcc.Dropdown(
+                    id='dataset-dropdown',
+                    options=[
+                        {'label': '🏘️ Migration', 'value': 'migration'},
+                        {'label': '✈️ Air Traffic', 'value': 'air_traffic'},
+                        {'label': '🧠 Brain Connectivity', 'value': 'brain'}
+                    ],
+                    value='migration',
+                    clearable=False,
+                    style={'fontSize': '14px'}
+                )
             ]),
             
-            # Edge Weight Factor Control (d parameter)
-            html.Div([
-                html.Label("Edge Weight Factor (d):", style={'color': brown, 'font-weight': 'bold', 'font-size': '14px'}),
-                html.Div(id='edge-weight-display', style={'color': green, 'font-size': '16px', 'margin': '3px 0'}),
-                dcc.Slider(
-                    id='edge-weight-slider',
-                    min=1.0,
-                    max=5.0,
-                    step=0.1,
-                    value=DEFAULT_EDGE_WEIGHT_FACTOR,
-                    marks={i: str(i) for i in range(1, 6)},
-                    tooltip={"placement": "bottom", "always_visible": True}
-                ),
-                html.P("Lower = favor short edges, higher = favor long edges", 
-                       style={'font-size': '11px', 'color': light_brown, 'margin': '5px 0 0 0'})
+            # Bundling Algorithm Section
+            html.Div(style={
+                'background': CARD_BG,
+                'border': f'1px solid {BORDER}',
+                'border-radius': '12px',
+                'padding': '16px',
+                'margin-bottom': '16px'
+            }, children=[
+                html.H6("Bundling Algorithm", style={
+                    'margin': '0 0 16px 0',
+                    'color': TEXT_PRIMARY,
+                    'font-size': '14px',
+                    'font-weight': '600'
+                }),
+                
+                # k parameter
+                html.Div(style={'margin-bottom': '16px'}, children=[
+                    html.Div(style={'display': 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '8px'}, children=[
+                        html.Label("Detour Factor (k)", style={
+                            'color': TEXT_PRIMARY,
+                            'font-size': '13px',
+                            'font-weight': '500'
+                        }),
+                        html.Div(id='bundling-factor-display', style={
+                            'background': ACCENT,
+                            'color': 'white',
+                            'padding': '4px 8px',
+                            'border-radius': '12px',
+                            'font-size': '12px',
+                            'font-weight': '600'
+                        })
+                    ]),
+                    dcc.Slider(
+                        id='bundling-factor-slider',
+                        min=1,
+                        max=3,
+                        step=0.5,
+                        value=DEFAULT_BUNDLING_FACTOR,
+                        marks={
+                            1: {'label': '1', 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}},
+                            1.5: {'label': '1.5', 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}},
+                            2: {'label': '2', 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}},
+                            2.5: {'label': '2.5', 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}},
+                            3: {'label': '3', 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}}
+                        },
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    ),
+                    html.P("How much can edges deviate from direct path?", style={
+                        'color': TEXT_SECONDARY,
+                        'font-size': '11px',
+                        'margin': '8px 0 0 0'
+                    })
+                ]),
+                
+                # d parameter
+                html.Div(children=[
+                    html.Div(style={'display': 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '8px'}, children=[
+                        html.Label("Length Weight (d)", style={
+                            'color': TEXT_PRIMARY,
+                            'font-size': '13px',
+                            'font-weight': '500'
+                        }),
+                        html.Div(id='edge-weight-display', style={
+                            'background': ACCENT,
+                            'color': 'white',
+                            'padding': '4px 8px',
+                            'border-radius': '12px',
+                            'font-size': '12px',
+                            'font-weight': '600'
+                        })
+                    ]),
+                    dcc.Slider(
+                        id='edge-weight-slider',
+                        min=1,
+                        max=3,
+                        step=1,
+                        value=DEFAULT_EDGE_WEIGHT_FACTOR,
+                        marks={
+                            1: {'label': '1', 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}},
+                            2: {'label': '2', 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}},
+                            3: {'label': '3', 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}}
+                        },
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    ),
+                    html.P("Priority for long vs short edges", style={
+                        'color': TEXT_SECONDARY,
+                        'font-size': '11px',
+                        'margin': '8px 0 0 0'
+                    })
+                ])
+            ]),
+            
+            # Visualization Section
+            html.Div(style={
+                'background': CARD_BG,
+                'border': f'1px solid {BORDER}',
+                'border-radius': '12px',
+                'padding': '16px'
+            }, children=[
+                html.H6("Visualization", style={
+                    'margin': '0 0 16px 0',
+                    'color': TEXT_PRIMARY,
+                    'font-size': '14px',
+                    'font-weight': '600'
+                }),
+                
+                html.Div(children=[
+                    html.Div(style={'display': 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '8px'}, children=[
+                        html.Label("Smoothing Level", style={
+                            'color': TEXT_PRIMARY,
+                            'font-size': '13px',
+                            'font-weight': '500'
+                        }),
+                        html.Div(id='smoothing-level-display', style={
+                            'background': ACCENT,
+                            'color': 'white',
+                            'padding': '4px 8px',
+                            'border-radius': '12px',
+                            'font-size': '12px',
+                            'font-weight': '600'
+                        })
+                    ]),
+                    dcc.Slider(
+                        id='smoothing-level-slider',
+                        min=1,
+                        max=4,
+                        step=1,
+                        value=DEFAULT_SMOOTHING_LEVEL,
+                        marks={i: {'label': str(i), 'style': {'color': TEXT_SECONDARY, 'font-size': '11px'}} for i in range(1, 5)},
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    ),
+                    html.P("Higher = smoother curves, more computation", style={
+                        'color': TEXT_SECONDARY,
+                        'font-size': '11px',
+                        'margin': '8px 0 0 0'
+                    })
+                ])
             ])
-        ], style={'padding': '0 15px', 'margin-bottom': '15px', 'border-bottom': f'1px solid {light_brown}'}),
-        
-        # Visualization Section
-        html.Div([
-            html.H5("🎨 Visualization", style={'color': green, 'margin': '15px 0 15px 0', 'font-size': '16px'}),
+        ]),
+
+        # Right side - Visualization
+        html.Div(style={
+            'flex': '1',
+            'display': 'flex',
+            'flex-direction': 'column',
+            'background': CARD_BG
+        }, children=[
             
-            # Bézier Smoothing Level Control
-            html.Div([
-                html.Label("Smoothing Level:", style={'color': brown, 'font-weight': 'bold', 'font-size': '14px'}),
-                html.Div(id='smoothing-level-display', style={'color': green, 'font-size': '16px', 'margin': '3px 0'}),
-                dcc.Slider(
-                    id='smoothing-level-slider',
-                    min=1,
-                    max=4,
-                    step=1,
-                    value=DEFAULT_SMOOTHING_LEVEL,
-                    marks={i: str(i) for i in range(1, 5)},
-                    tooltip={"placement": "bottom", "always_visible": True}
-                ),
-                html.P("Higher = smoother curves, more computation", 
-                       style={'font-size': '11px', 'color': light_brown, 'margin': '5px 0 15px 0'})
-            ]),
+            # Visualization title
+            html.Div(id='viz-title', style={
+                'padding': '20px 24px 16px 24px',
+                'border-bottom': f'1px solid {BORDER}',
+                'background': BACKGROUND,
+                'text-align': 'center',
+                'font-size': '18px',
+                'font-weight': '600',
+                'color': TEXT_PRIMARY
+            }),
             
-        ], style={'padding': '0 15px'}),
-        
-    ]),
+            # Status chips
+            html.Div(id='graph-stats', style={
+                'padding': '8px 24px 12px 24px',
+                'border-bottom': f'1px solid {BORDER}',
+                'background': BACKGROUND,
+                'display': 'flex',
+                'justify-content': 'center',
+                'gap': '8px',
+                'font-size': '13px',
+                'color': TEXT_SECONDARY
+            }),
+            
+            # Loading status (compact)
+            html.Div(id='loading-status', style={
+                'position': 'absolute',
+                'top': '72px',
+                'right': '24px',
+                'background': CARD_BG,
+                'padding': '8px 12px',
+                'border-radius': '6px',
+                'font-size': '13px',
+                'color': TEXT_PRIMARY,
+                'box-shadow': '0 2px 8px rgba(0,0,0,0.1)',
+                'z-index': '1000'
+            }),
+            
+            # Main visualization
+            html.Div(style={'flex': '1', 'position': 'relative', 'min-height': '600px'}, children=[
+                dcc.Loading(
+                    id="loading-graph",
+                    type="default",
+                    children=[dcc.Graph(
+                        figure={}, 
+                        id='main-graph',
+                        style={'height': 'calc(100vh - 180px)', 'width': '100%'}
+                    )],
+                    style={'height': '100%'}
+                )
+            ])
+        ])
+    ])
 ])
 
 # Callbacks
@@ -196,7 +327,7 @@ def update_bundling_factor_display(value):
     Input('edge-weight-slider', 'value')
 )
 def update_edge_weight_display(value):
-    return f"d = {value:.1f}"
+    return f"d = {value}"
 
 @app.callback(
     Output('smoothing-level-display', 'children'),
@@ -236,7 +367,7 @@ def show_loading_message(dataset, bundling_factor, edge_weight_factor, smoothing
     return f"🔄 Loading {dataset_name} dataset and running bundling algorithm..."
 
 @app.callback(
-    [Output('main-graph', 'figure'), Output('graph-stats', 'children'), Output('loading-status', 'children', allow_duplicate=True)],
+    [Output('main-graph', 'figure'), Output('viz-title', 'children'), Output('graph-stats', 'children'), Output('loading-status', 'children', allow_duplicate=True)],
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
      Input('edge-weight-slider', 'value'),
@@ -301,8 +432,8 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level):
         else:
             title = f"US County Migration Flows ({graph.number_of_nodes()} counties)"
     
-    # Special case: k=1, d=1 means "no bundling" for better user experience
-    if bundling_factor == 1.0 and edge_weight_factor == 1.0:
+    # Special case: k=1 means "no bundling" for better user experience
+    if bundling_factor == 1.0:
         # Return empty bundling result to show original network
         result = {
             'bundled_paths': [],
@@ -328,7 +459,7 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level):
     else:
         dataset_type = None  # Fallback to auto-detection
     
-    fig = create_network_visualization(graph, result['bundled_paths'], title, 
+    fig = create_network_visualization(graph, result['bundled_paths'], "", 
                                      use_curves=True, smoothing_level=smoothing_level, num_samples=FIXED_NUM_SAMPLES,
                                      dataset_type=dataset_type)
     
@@ -337,7 +468,7 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level):
                   f"Bundled: {stats['bundled']} | "
                   f"Bundling ratio: {(stats['bundled']/stats['total_edges']*100):.1f}%")
     
-    return fig, stats_text, status_msg
+    return fig, title, stats_text, status_msg
 
 
 
