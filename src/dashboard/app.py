@@ -248,6 +248,32 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                         'font-size': '11px',
                         'margin': '8px 0 0 0'
                     })
+                ]),
+                
+                # Bundled edge color toggle
+                html.Div(style={'margin-top': '16px'}, children=[
+                    html.Label("Bundled Edge Color", style={
+                        'color': TEXT_PRIMARY,
+                        'font-size': '13px',
+                        'font-weight': '500',
+                        'margin-bottom': '8px',
+                        'display': 'block'
+                    }),
+                    dcc.RadioItems(
+                        id='edge-color-toggle',
+                        options=[
+                            {'label': 'Highlight (red)', 'value': 'highlight'},
+                            {'label': 'Normal (gray)', 'value': 'normal'}
+                        ],
+                        value='highlight',
+                        style={'color': TEXT_PRIMARY, 'font-size': '13px'},
+                        inputStyle={'margin-right': '6px', 'margin-left': '0px'}
+                    ),
+                    html.P("Choose how bundled edges are colored", style={
+                        'color': TEXT_SECONDARY,
+                        'font-size': '11px',
+                        'margin': '8px 0 0 0'
+                    })
                 ])
             ])
         ]),
@@ -371,10 +397,11 @@ def show_loading_message(dataset, bundling_factor, edge_weight_factor, smoothing
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
      Input('edge-weight-slider', 'value'),
-     Input('smoothing-level-slider', 'value')],
+     Input('smoothing-level-slider', 'value'),
+     Input('edge-color-toggle', 'value')],
     prevent_initial_call='initial_duplicate'
 )
-def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level):
+def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, edge_color):
     """Update the main graph based on selected parameters."""
     
     # Handle None values (initial load)
@@ -461,7 +488,7 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level):
     
     fig = create_network_visualization(graph, result['bundled_paths'], "", 
                                      use_curves=True, smoothing_level=smoothing_level, num_samples=FIXED_NUM_SAMPLES,
-                                     dataset_type=dataset_type)
+                                     dataset_type=dataset_type, edge_color_mode=edge_color)
     
     # Create stats text
     stats_text = (f"Total edges: {stats['total_edges']} | "
