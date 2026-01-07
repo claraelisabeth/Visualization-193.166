@@ -12,6 +12,32 @@ from typing import Dict, List, Tuple, Optional
 from .curves import create_smooth_bundled_path
 
 
+# Performance constants
+MAX_UNBUNDLED_EDGES_MAP = 500
+MAX_UNBUNDLED_EDGES_3D = 1000
+DEFAULT_CURVE_SAMPLES = 100
+DEFAULT_SMOOTHING_LEVEL = 2
+
+# Geographic bounds
+LON_RANGE = (-180, 180)
+LAT_RANGE = (-90, 90)
+US_LON_RANGE = (-180, -60)
+US_LAT_RANGE = (15, 75)
+CONTINENTAL_US_LON_RANGE = (-130, -65)
+CONTINENTAL_US_LAT_RANGE = (20, 50)
+
+# Color scheme
+COLORS = {
+    'unbundled': 'lightgray',
+    'unbundled_map': 'rgba(150, 150, 150, 0.4)',
+    'bundled_highlight': 'red',
+    'bundled_normal': 'lightgray',
+    'bundled_map_highlight': 'rgba(255, 50, 50, 0.8)',
+    'bundled_map_normal': 'rgba(150, 150, 150, 0.6)',
+    'node': 'rgb(78, 110, 77)'
+}
+
+
 def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
                                 use_curves: bool = True, smoothing_level: int = 2,
                                 num_samples: int = 100, dataset_type: Optional[str] = None,
@@ -41,10 +67,14 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         # Create map-based visualization for geographic data
         node_positions = {node: (data['x'], data['y']) for node, data in graph.nodes(data=True)}
         try:
-            return _create_map_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples, edge_color_mode)
-        except Exception as e:
+            return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
+                                           use_curves, smoothing_level, num_samples, 
+                                           edge_color_mode, is_map=True)
+        except Exception:
             # Fallback to scatter plot if map fails
-            return _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples, edge_color_mode)
+            return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
+                                           use_curves, smoothing_level, num_samples, 
+                                           edge_color_mode, is_map=False)
     
     # Fallback to auto-detection (for backward compatibility)
     else:
@@ -64,12 +94,14 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
         if use_map:
             # Create map-based visualization
             try:
-                return _create_map_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples, edge_color_mode)
-            except Exception as e:
+                return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
+                                               use_curves, smoothing_level, num_samples, 
+                                               edge_color_mode, is_map=True)
+            except Exception:
                 # Create error figure for geographic data when map fails
                 fig = go.Figure()
                 fig.add_annotation(
-                    text=f"Map visualization failed: {str(e)}<br>Please install plotly with mapbox support",
+                    text="Map visualization failed<br>Please install plotly with mapbox support",
                     xref="paper", yref="paper", x=0.5, y=0.5,
                     showarrow=False, font=dict(size=16, color="red"),
                     bgcolor="rgba(255,255,255,0.8)", bordercolor="red", borderwidth=2
@@ -83,7 +115,9 @@ def create_network_visualization(graph, bundled_paths: List[Dict], title: str,
                 return fig
         else:
             # Create standard scatter plot visualization
-            return _create_scatter_visualization(graph, bundled_paths, node_positions, title, use_curves, smoothing_level, num_samples, edge_color_mode)
+            return _create_2d_visualization(graph, bundled_paths, node_positions, title, 
+                                           use_curves, smoothing_level, num_samples, 
+                                           edge_color_mode, is_map=False)
 
 
 def _is_brain_3d_data(graph) -> bool:
@@ -101,103 +135,110 @@ def _is_brain_3d_data(graph) -> bool:
     return False
 
 
-def _is_geographic_data(node_positions: Dict) -> bool:
+def _validate_coordinate_range(coords: List[float], min_val: float, max_val: float) -> bool:
+    """Check if coordinates are within the specified range."""
+    return all(min_val <= coord <= max_val for coord in coords)
+
+
+def _has_geographic_spread(coords: List[float], min_spread: float = 1.0) -> bool:
+    """Check if coordinates have sufficient geographic spread."""
+    return max(coords) - min(coords) > min_spread
+
+
+def _is_geographic_data(node_positions: Dict, sample_size: int = 10) -> bool:
     """Check if node positions are likely geographic coordinates (lat/lon)."""
     if not node_positions:
         return False
     
-    # Sample a few positions to check ranges
-    positions = list(node_positions.values())[:10]  # Check first 10 nodes
-    
+    # Sample positions to check ranges
+    positions = list(node_positions.values())[:sample_size]
     x_coords = [pos[0] for pos in positions]
     y_coords = [pos[1] for pos in positions]
     
-    # Check if coordinates are in typical lat/lon ranges
-    x_in_lon_range = all(-180 <= x <= 180 for x in x_coords)
-    y_in_lat_range = all(-90 <= y <= 90 for y in y_coords)
+    # Check coordinate ranges and spread
+    lon_valid = _validate_coordinate_range(x_coords, *LON_RANGE)
+    lat_valid = _validate_coordinate_range(y_coords, *LAT_RANGE)
+    has_spread = (_has_geographic_spread(x_coords) and 
+                  _has_geographic_spread(y_coords))
     
-    # Check if there's reasonable geographic spread
-    x_range = max(x_coords) - min(x_coords)
-    y_range = max(y_coords) - min(y_coords)
-    
-    return x_in_lon_range and y_in_lat_range and x_range > 1 and y_range > 1
+    return lon_valid and lat_valid and has_spread
 
 
-def _is_us_data(node_positions: Dict) -> bool:
+def _is_us_data(node_positions: Dict, sample_size: int = 20) -> bool:
     """Check if node positions are likely US coordinates."""
     if not node_positions:
         return False
     
-    # Sample positions to check if they're in US bounds
-    positions = list(node_positions.values())[:20]  # Check more nodes for accuracy
-    
+    positions = list(node_positions.values())[:sample_size]
     x_coords = [pos[0] for pos in positions]  # longitude
     y_coords = [pos[1] for pos in positions]  # latitude
     
-    # US bounds (roughly): longitude -180 to -60, latitude 15 to 75
-    us_lon_range = all(-180 <= x <= -60 for x in x_coords)
-    us_lat_range = all(15 <= y <= 75 for y in y_coords)
+    # Check US bounds
+    us_lon_valid = _validate_coordinate_range(x_coords, *US_LON_RANGE)
+    us_lat_valid = _validate_coordinate_range(y_coords, *US_LAT_RANGE)
     
-    # Check if most coordinates are in continental US range
-    continental_us_count = sum(1 for x, y in zip(x_coords, y_coords) 
-                              if -130 <= x <= -65 and 20 <= y <= 50)
+    # Check continental US concentration
+    continental_count = sum(
+        1 for x, y in zip(x_coords, y_coords) 
+        if (CONTINENTAL_US_LON_RANGE[0] <= x <= CONTINENTAL_US_LON_RANGE[1] and 
+            CONTINENTAL_US_LAT_RANGE[0] <= y <= CONTINENTAL_US_LAT_RANGE[1])
+    )
     
-    return us_lon_range and us_lat_range and continental_us_count >= len(positions) * 0.7
+    return (us_lon_valid and us_lat_valid and 
+            continental_count >= len(positions) * 0.7)
 
 
-def _create_map_visualization(graph, bundled_paths: List[Dict], node_positions: Dict, title: str,
-                             use_curves: bool, smoothing_level: int, num_samples: int, edge_color_mode: str = 'highlight') -> go.Figure:
-    """Create map-based visualization for geographic data."""
-    fig = go.Figure()
+def _get_visualization_colors(edge_color_mode: str, is_map: bool = False) -> Dict[str, str]:
+    """Get color scheme for visualization based on mode and type."""
+    base_colors = COLORS.copy()
     
-    # Define colors based on mode
-    unbundled_color = 'rgba(150, 150, 150, 0.4)'  # More transparent for map
-    bundled_color = 'rgba(255, 50, 50, 0.8)' if edge_color_mode == 'highlight' else 'rgba(150, 150, 150, 0.6)'
-    node_color = 'rgba(78, 110, 77, 0.9)'         # Dashboard green
-    
-    # Draw unbundled edges
-    _add_unbundled_edges_map(fig, graph, node_positions, unbundled_color)
-    
-    # Draw bundled paths
-    if use_curves:
-        _add_bundled_curves_map(fig, bundled_paths, node_positions, bundled_color, smoothing_level, num_samples)
+    if is_map:
+        bundled_key = 'bundled_map_highlight' if edge_color_mode == 'highlight' else 'bundled_map_normal'
+        return {
+            'unbundled': base_colors['unbundled_map'],
+            'bundled': base_colors[bundled_key],
+            'node': f"{base_colors['node'][:-1]}, 0.9)"  # Add opacity
+        }
     else:
-        _add_bundled_segments_map(fig, bundled_paths, node_positions, bundled_color)
-    
-    # Draw nodes
-    _add_nodes_map(fig, graph, node_positions, node_color)
-    
-    # Configure map layout
-    _configure_map_layout(fig, title, use_curves, node_positions)
-    
-    return fig
+        bundled_key = 'bundled_highlight' if edge_color_mode == 'highlight' else 'bundled_normal'
+        return {
+            'unbundled': base_colors['unbundled'],
+            'bundled': base_colors[bundled_key],
+            'node': base_colors['node']
+        }
 
 
-def _create_scatter_visualization(graph, bundled_paths: List[Dict], node_positions: Dict, title: str,
-                                 use_curves: bool, smoothing_level: int, num_samples: int, edge_color_mode: str = 'highlight') -> go.Figure:
-    """Create standard scatter plot visualization for non-geographic data."""
+def _create_2d_visualization(graph, bundled_paths: List[Dict], node_positions: Dict, title: str,
+                            use_curves: bool, smoothing_level: int, num_samples: int, 
+                            edge_color_mode: str = 'highlight', is_map: bool = False) -> go.Figure:
+    """Create 2D visualization (map or scatter plot) for geographic or standard data."""
     fig = go.Figure()
+    colors = _get_visualization_colors(edge_color_mode, is_map)
     
-    # Define colors based on mode
-    unbundled_color = 'lightgray'
-    bundled_color = 'red' if edge_color_mode == 'highlight' else 'lightgray'
-    node_color = 'rgb(78, 110, 77)'  # Green from dashboard theme
-    
-    # Draw unbundled edges (straight lines)
-    _add_unbundled_edges(fig, graph, node_positions, unbundled_color)
-    
-    # Draw bundled paths (smooth curves or line segments)
-    if use_curves:
-        _add_bundled_curves(fig, bundled_paths, node_positions, bundled_color, 
-                           smoothing_level, num_samples)
+    # Choose appropriate drawing functions based on visualization type
+    if is_map:
+        edge_func = _add_unbundled_edges_map
+        curve_func = _add_bundled_curves_map
+        segment_func = _add_bundled_segments_map
+        node_func = _add_nodes_map
+        layout_func = _configure_map_layout
     else:
-        _add_bundled_segments(fig, bundled_paths, node_positions, bundled_color)
+        edge_func = _add_unbundled_edges
+        curve_func = _add_bundled_curves
+        segment_func = _add_bundled_segments
+        node_func = _add_nodes
+        layout_func = _configure_layout
     
-    # Draw nodes
-    _add_nodes(fig, graph, node_positions, node_color)
+    # Draw visualization elements
+    edge_func(fig, graph, node_positions, colors['unbundled'])
     
-    # Configure layout
-    _configure_layout(fig, title, use_curves, node_positions)
+    if use_curves:
+        curve_func(fig, bundled_paths, node_positions, colors['bundled'], smoothing_level, num_samples)
+    else:
+        segment_func(fig, bundled_paths, node_positions, colors['bundled'])
+    
+    node_func(fig, graph, node_positions, colors['node'])
+    layout_func(fig, title, use_curves, node_positions)
     
     return fig
 
@@ -313,19 +354,8 @@ def _configure_layout(fig: go.Figure, title: str, use_curves: bool, node_positio
     curve_type = "Smooth Bézier curves" if use_curves else "Line segments"
     annotation_text = f"Red: bundled paths ({curve_type}), Gray: direct edges"
     
-    # Check if this might be geographic data based on coordinate ranges
-    is_geographic = False
-    if node_positions:
-        positions = list(node_positions.values())[:10]
-        if positions:
-            x_coords = [pos[0] for pos in positions]
-            y_coords = [pos[1] for pos in positions]
-            # Check if coordinates look like lat/lon
-            x_in_lon_range = all(-180 <= x <= 180 for x in x_coords)
-            y_in_lat_range = all(-90 <= y <= 90 for y in y_coords)
-            x_range = max(x_coords) - min(x_coords)
-            y_range = max(y_coords) - min(y_coords)
-            is_geographic = x_in_lon_range and y_in_lat_range and x_range > 1 and y_range > 1
+    # Check if this might be geographic data
+    is_geographic = _is_geographic_data(node_positions) if node_positions else False
     
     if is_geographic:
         # Geographic scatter plot with visible axes and light grid
@@ -395,8 +425,8 @@ def _add_unbundled_edges_map(fig: go.Figure, graph, node_positions: Dict, color:
                       if not data.get('bundled', False)]
     
     # Limit edges for performance
-    if len(unbundled_edges) > 500:
-        unbundled_edges = random.sample(unbundled_edges, 500)
+    if len(unbundled_edges) > MAX_UNBUNDLED_EDGES_MAP:
+        unbundled_edges = random.sample(unbundled_edges, MAX_UNBUNDLED_EDGES_MAP)
     
     for u, v in unbundled_edges:
         if u in node_positions and v in node_positions:
@@ -589,8 +619,8 @@ def _add_unbundled_edges_3d(fig: go.Figure, graph, node_positions: Dict, color: 
                       if not data.get('bundled', False)]
     
     # Limit edges for performance (brain data can be dense)
-    if len(unbundled_edges) > 1000:
-        unbundled_edges = random.sample(unbundled_edges, 1000)
+    if len(unbundled_edges) > MAX_UNBUNDLED_EDGES_3D:
+        unbundled_edges = random.sample(unbundled_edges, MAX_UNBUNDLED_EDGES_3D)
     
     for u, v in unbundled_edges:
         if u in node_positions and v in node_positions:
@@ -694,7 +724,11 @@ def _add_nodes_3d(fig: go.Figure, graph, node_positions: Dict, color: str):
 
 
 def _create_smooth_3d_path(path_nodes: List, node_positions: Dict, smoothing_level: int, num_samples: int) -> List[Tuple]:
-    """Create smooth 3D curve for bundled path using simple interpolation."""
+    """Create smooth 3D curve for bundled path using simple interpolation.
+    
+    Note: smoothing_level parameter is kept for API consistency but not used
+    in this simple linear interpolation implementation.
+    """
     if len(path_nodes) < 2:
         return []
     
@@ -709,12 +743,14 @@ def _create_smooth_3d_path(path_nodes: List, node_positions: Dict, smoothing_lev
     
     # Simple linear interpolation for 3D curves
     curve_points = []
+    samples_per_segment = max(1, num_samples // (len(path_coords) - 1))
+    
     for i in range(len(path_coords) - 1):
         x0, y0, z0 = path_coords[i]
         x1, y1, z1 = path_coords[i + 1]
         
         # Linear interpolation between points
-        for t in np.linspace(0, 1, num_samples // (len(path_coords) - 1)):
+        for t in np.linspace(0, 1, samples_per_segment):
             x = x0 + t * (x1 - x0)
             y = y0 + t * (y1 - y0)
             z = z0 + t * (z1 - z0)
