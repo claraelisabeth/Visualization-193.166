@@ -163,6 +163,8 @@ body {
 
 #main-graph {
     background-color: rgba(0, 0, 0, 0);
+    transform: scale(0.85);
+    transform-origin: center center;
 }
 
 #spy-not-sorted {
@@ -203,6 +205,11 @@ body {
 
     width: 33vw;
     height: 50vh;
+}
+
+/* Hide Dash debug menu */
+.dash-debug-menu__outer {
+    display: none !important;
 }
 
 
