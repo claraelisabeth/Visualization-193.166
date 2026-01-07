@@ -724,37 +724,102 @@ def _add_nodes_3d(fig: go.Figure, graph, node_positions: Dict, color: str):
 
 
 def _create_smooth_3d_path(path_nodes: List, node_positions: Dict, smoothing_level: int, num_samples: int) -> List[Tuple]:
-    """Create smooth 3D curve for bundled path using simple interpolation.
+    """Create smooth 3D Bézier curve for bundled path.
     
-    Note: smoothing_level parameter is kept for API consistency but not used
-    in this simple linear interpolation implementation.
+    Uses the same recursive smoothing and Bézier curve approach as 2D,
+    extended to 3D coordinates.
     """
     if len(path_nodes) < 2:
         return []
     
-    # Get 3D coordinates for path nodes
-    path_coords = []
-    for node in path_nodes:
-        if node in node_positions:
-            path_coords.append(node_positions[node])
+    # Extract 3D coordinates from path nodes  
+    control_points = []
+    for node_id in path_nodes:
+        if node_id in node_positions:
+            x, y, z = node_positions[node_id]
+            control_points.append(np.array([x, y, z]))
     
-    if len(path_coords) < 2:
+    if len(control_points) < 2:
         return []
     
-    # Simple linear interpolation for 3D curves
-    curve_points = []
-    samples_per_segment = max(1, num_samples // (len(path_coords) - 1))
+    # Apply recursive smoothing (same algorithm as 2D, but with 3D points)
+    smoothed_points = _apply_3d_recursive_smoothing(control_points, smoothing_level)
     
-    for i in range(len(path_coords) - 1):
-        x0, y0, z0 = path_coords[i]
-        x1, y1, z1 = path_coords[i + 1]
+    # Generate smooth Bézier curve in 3D
+    curve_points = _generate_3d_bezier_curve(smoothed_points, num_samples)
+    
+    return curve_points
+
+
+def _apply_3d_recursive_smoothing(points: List[np.ndarray], smoothing_level: int) -> List[np.ndarray]:
+    """Apply recursive smoothing to 3D control points."""
+    if smoothing_level <= 1 or len(points) < 2:
+        return points
         
-        # Linear interpolation between points
-        for t in np.linspace(0, 1, samples_per_segment):
-            x = x0 + t * (x1 - x0)
-            y = y0 + t * (y1 - y0)
-            z = z0 + t * (z1 - z0)
-            curve_points.append((x, y, z))
+    smoothed_points = points.copy()
+    
+    # Apply recursive smoothing (same as 2D implementation)
+    for level in range(1, smoothing_level):
+        new_points = []
+        
+        for i in range(len(smoothed_points) - 1):
+            # Add current point
+            new_points.append(smoothed_points[i])
+            # Add midpoint between current and next
+            midpoint = (smoothed_points[i] + smoothed_points[i + 1]) / 2.0
+            new_points.append(midpoint)
+        
+        # Add final point
+        new_points.append(smoothed_points[-1])
+        smoothed_points = new_points
+    
+    return smoothed_points
+
+
+def _evaluate_3d_bezier_curve(control_points: List[np.ndarray], t: float) -> np.ndarray:
+    """Evaluate 3D Bézier curve at parameter t using De Casteljau's algorithm."""
+    if not control_points:
+        return np.array([0, 0, 0])
+    
+    if t <= 0:
+        return control_points[0]
+    if t >= 1:
+        return control_points[-1]
+    
+    # De Casteljau's algorithm (same as 2D, works for any dimension)
+    points = control_points.copy()
+    
+    while len(points) > 1:
+        next_level = []
+        for i in range(len(points) - 1):
+            # Linear interpolation between consecutive points
+            interpolated = (1 - t) * points[i] + t * points[i + 1]
+            next_level.append(interpolated)
+        points = next_level
+    
+    return points[0]
+
+
+def _generate_3d_bezier_curve(control_points: List[np.ndarray], num_samples: int) -> List[Tuple]:
+    """Generate sampled points along 3D Bézier curve."""
+    if len(control_points) < 2:
+        if len(control_points) == 1:
+            p = control_points[0]
+            return [(float(p[0]), float(p[1]), float(p[2]))]
+        return []
+    
+    if num_samples < 2:
+        # Return endpoints only
+        start, end = control_points[0], control_points[-1]
+        return [(float(start[0]), float(start[1]), float(start[2])), 
+                (float(end[0]), float(end[1]), float(end[2]))]
+    
+    curve_points = []
+    
+    for i in range(num_samples):
+        t = i / (num_samples - 1)  # Parameter from 0 to 1
+        point = _evaluate_3d_bezier_curve(control_points, t)
+        curve_points.append((float(point[0]), float(point[1]), float(point[2])))
     
     return curve_points
 

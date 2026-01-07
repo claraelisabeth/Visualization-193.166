@@ -5,7 +5,8 @@ Interactive Dash application for exploring edge path bundling on different datas
 Supports 2D visualization with parameter controls for bundling factor and dataset selection.
 """
 
-from dash import Dash, html, dcc, Output, Input
+from dash import Dash, html, dcc, Output, Input, State
+import plotly.graph_objects as go
 
 from pathlib import Path
 from ..core.bundling import bundle_edges
@@ -26,7 +27,7 @@ BORDER = '#e1e8ed'
 HEADER_BG = '#34495e'
 
 # Default parameters
-DEFAULT_BUNDLING_FACTOR = 1.0  # k parameter - maximum detour ratio
+DEFAULT_BUNDLING_FACTOR = 1.0  # k parameter - maximum distortion threshold
 DEFAULT_EDGE_WEIGHT_FACTOR = 2.0  # d parameter - edge weight factor
 DEFAULT_SMOOTHING_LEVEL = 2  # Bézier smoothing level
 DEFAULT_DATASET = 'brain'
@@ -57,6 +58,9 @@ DATASET_FILES = {
 
 # Global cache for loaded datasets (performance optimization)
 _dataset_cache = {}
+
+# Global cache for bundling results (performance optimization)
+_bundling_cache = {}
 
 # Initialize the app with assets folderI
 assets_path = Path(__file__).parent / 'static'
@@ -146,7 +150,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                 # k parameter
                 html.Div(style={'margin-bottom': '16px'}, children=[
                     html.Div(style={'display': 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '8px'}, children=[
-                        html.Label("Detour Factor (k)", style={
+                        html.Label("Maximum Distortion Threshold (k)", style={
                             'color': TEXT_PRIMARY,
                             'font-size': '13px',
                             'font-weight': '500'
@@ -175,7 +179,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                         },
                         tooltip={"placement": "bottom", "always_visible": True}
                     ),
-                    html.P("How much can edges deviate from direct path?", style={
+                    html.P("Maximum allowed distortion ratio for bundled paths", style={
                         'color': TEXT_SECONDARY,
                         'font-size': '11px',
                         'margin': '8px 0 0 0'
@@ -185,7 +189,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                 # d parameter
                 html.Div(children=[
                     html.Div(style={'display': 'flex', 'justify-content': 'space-between', 'align-items': 'center', 'margin-bottom': '8px'}, children=[
-                        html.Label("Length Weight (d)", style={
+                        html.Label("Edge Weight Factor (d)", style={
                             'color': TEXT_PRIMARY,
                             'font-size': '13px',
                             'font-weight': '500'
@@ -212,7 +216,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                         },
                         tooltip={"placement": "bottom", "always_visible": True}
                     ),
-                    html.P("Priority for long vs short edges", style={
+                    html.P("Weight factor for edge length in bundling calculation", style={
                         'color': TEXT_SECONDARY,
                         'font-size': '11px',
                         'margin': '8px 0 0 0'
@@ -384,28 +388,84 @@ def update_smoothing_level_display(value):
     return f"Level = {value}"
 
 
-# Reset sliders to default when dataset changes
+# Reset sliders to default when dataset changes - also clear graph immediately
 @app.callback(
     [Output('bundling-factor-slider', 'value'),
      Output('edge-weight-slider', 'value'),
-     Output('smoothing-level-slider', 'value')],
-    Input('dataset-dropdown', 'value')
+     Output('smoothing-level-slider', 'value'),
+     Output('main-graph', 'figure', allow_duplicate=True)],
+    Input('dataset-dropdown', 'value'),
+    prevent_initial_call=True
 )
 def reset_sliders_on_dataset_change(dataset):
-    return DEFAULT_BUNDLING_FACTOR, DEFAULT_EDGE_WEIGHT_FACTOR, DEFAULT_SMOOTHING_LEVEL
+    # Immediately clear the graph to prevent showing old data
+    empty_fig = go.Figure()
+    empty_fig.add_annotation(
+        text=f"Loading {DATASET_NAMES.get(dataset, 'Unknown')} dataset...",
+        xref="paper", yref="paper", x=0.5, y=0.5,
+        showarrow=False, font=dict(size=16, color="gray"),
+        bgcolor="rgba(255,255,255,0.9)"
+    )
+    empty_fig.update_layout(
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        plot_bgcolor='white',
+        margin=dict(t=20, b=20, l=20, r=20)
+    )
+    return DEFAULT_BUNDLING_FACTOR, DEFAULT_EDGE_WEIGHT_FACTOR, DEFAULT_SMOOTHING_LEVEL, empty_fig
 
-# Immediate loading message callback (fires first)
+# Immediate loading message callback (fires first) - only for bundling changes
 @app.callback(
     Output('loading-status', 'children'),
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
-     Input('edge-weight-slider', 'value'),
-     Input('smoothing-level-slider', 'value')]
+     Input('edge-weight-slider', 'value')]
 )
-def show_loading_message(dataset, bundling_factor, edge_weight_factor, smoothing_level):
-    """Show immediate loading message when parameters change."""
+def show_loading_message(dataset, bundling_factor, edge_weight_factor):
+    """Show immediate loading message when bundling parameters change."""
     dataset_name = DATASET_NAMES.get(dataset, 'Unknown')
     return f"🔄 Loading {dataset_name} dataset and running bundling algorithm..."
+
+# Fast callback for visualization-only changes
+@app.callback(
+    [Output('main-graph', 'figure', allow_duplicate=True), Output('loading-status', 'children', allow_duplicate=True)],
+    [Input('smoothing-level-slider', 'value'),
+     Input('edge-color-toggle', 'value')],
+    [State('main-graph', 'figure'),
+     State('dataset-dropdown', 'value'),
+     State('bundling-factor-slider', 'value'),
+     State('edge-weight-slider', 'value')],
+    prevent_initial_call=True
+)
+def update_visualization_only(smoothing_level, edge_color, current_fig, dataset, bundling_factor, edge_weight_factor):
+    """Fast update for visualization-only changes (no bundling recalculation)."""
+    if not current_fig or not dataset:
+        return current_fig, "No data available"
+    
+    # Get cached data
+    global _dataset_cache, _bundling_cache
+    graph = _dataset_cache.get(dataset)
+    if not graph:
+        return current_fig, "Dataset not loaded"
+    
+    # Get cached bundling results 
+    cache_key = f"{dataset}_{bundling_factor}_{edge_weight_factor}"
+    bundling_result = _bundling_cache.get(cache_key)
+    if not bundling_result:
+        return current_fig, "Bundling results not cached"
+    
+    # Regenerate visualization with new parameters (fast - no bundling computation)
+    dataset_type = _get_dataset_type(dataset)
+    fig = create_network_visualization(
+        graph, bundling_result['bundled_paths'], "", 
+        use_curves=True, 
+        smoothing_level=smoothing_level, 
+        num_samples=FIXED_NUM_SAMPLES,
+        dataset_type=dataset_type, 
+        edge_color_mode=edge_color
+    )
+    
+    return fig, f"✓ Visualization updated (smoothing: {smoothing_level}, color: {edge_color})"
 
 def _get_cached_dataset(dataset_key):
     """Get dataset from cache or load and cache it for performance."""
@@ -470,9 +530,9 @@ def _get_dataset_type(dataset):
     [Output('main-graph', 'figure'), Output('viz-title', 'children'), Output('graph-stats', 'children'), Output('loading-status', 'children', allow_duplicate=True)],
     [Input('dataset-dropdown', 'value'),
      Input('bundling-factor-slider', 'value'),
-     Input('edge-weight-slider', 'value'),
-     Input('smoothing-level-slider', 'value'),
-     Input('edge-color-toggle', 'value')],
+     Input('edge-weight-slider', 'value')],
+    [State('smoothing-level-slider', 'value'),
+     State('edge-color-toggle', 'value')],
     prevent_initial_call='initial_duplicate'
 )
 def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, edge_color):
@@ -490,8 +550,16 @@ def update_graph(dataset, bundling_factor, edge_weight_factor, smoothing_level, 
     if graph is None:
         return {}, "Error loading data", "", "Error loading dataset"
     
-    # Run bundling algorithm
-    result = _run_bundling(graph, bundling_factor, edge_weight_factor)
+    # Run bundling algorithm and cache results
+    cache_key = f"{dataset}_{bundling_factor}_{edge_weight_factor}"
+    global _bundling_cache
+    
+    if cache_key not in _bundling_cache:
+        result = _run_bundling(graph, bundling_factor, edge_weight_factor)
+        _bundling_cache[cache_key] = result
+    else:
+        result = _bundling_cache[cache_key]
+    
     stats = result['statistics']
     
     # Create visualization
