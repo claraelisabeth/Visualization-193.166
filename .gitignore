@@ -173,3 +173,7 @@ tmp/
 # Jupyter notebook outputs (keep notebooks but not outputs)
 *.ipynb
 !*-template.ipynb
+
+
+documentation/images/*.mp4
+*.mp4
