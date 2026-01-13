@@ -123,7 +123,7 @@ Then open your browser and navigate to `http://localhost:8050` to view the inter
 
 ## Documentation
 
-For detailed code documentation, see `documentation/code_documentation.html`.
+For detailed code documentation, see https://claraelisabeth.github.io/Visualization-193.166/documentation/code_documentation.html.
 
 ---
 
