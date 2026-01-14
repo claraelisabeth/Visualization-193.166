@@ -81,7 +81,7 @@ app.layout = html.Div(style={'font-family': 'system-ui, -apple-system, sans-seri
                 'font-size': '14px',
                 'margin-right': '12px'
             }),
-            html.Img(src='/assets/TUlogo.png', height='32px', width='32px')
+            html.Img(src='/assets/Tulogo.png', height='32px', width='32px')
         ], style={'display': 'flex', 'align-items': 'center'})
     ], style={
         'height': '56px',
