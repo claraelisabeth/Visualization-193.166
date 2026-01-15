@@ -359,18 +359,27 @@
   </p>
 
   <p>
-    Future work could focus on performance optimizations, GPU-based rendering,
-    or benchmarking EPB against other edge bundling techniques to better understand
-    its strengths and limitations.
-  </p>
-
-  <p>
     In the worst case, EPB has a time complexity of
     <code>O(|E|² log |V|)</code>, as Dijkstra’s algorithm may be executed for each edge.
     In practice, the distortion threshold <code>k</code> significantly reduces runtime
     by terminating path searches early. We did improve performance by introducing caching system for 
-    datasets and bundling results as well as limiting the nodes of each of the datasets. 
+    datasets and bundling results as well as limiting the nodes of each of the datasets. However, we belive 
+    performance can still be greatly improved. 
   </p>
+
+  <p>
+    Future work could focus on performance optimizations, through GPU-based rendering
+    or pre computing some commonly used statistics. For example pre-computing common 
+    Bèzier curve configurations to minimize real-time computational overhead.
+  </p>
+
+  <p>Another interesting addition to this project is benchmarking EPB against other edge bundling techniques to better understand
+    its strengths and limitations. Although EPB introduces way less ambiguities than other bundeling algorithms, they are still 
+    struggeling with some. In their paper they are discussing <strong>Path Endpoint Ambiguit</strong> and <strong>Edge Crossing Ambiguity</strong> 
+    which are still an open problem and would be interesting to explore.</p>
+
+
+
 </section>
 
 <section id="references">
