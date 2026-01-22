@@ -16,7 +16,7 @@
     }
 
     header {
-      background: linear-gradient(135deg, rgb(73, 135, 194), rgb(16, 115, 160));
+      background: linear-gradient(135deg, rgb(116, 178, 235), rgb(16, 115, 160));
       color: rgb(241, 246, 247);
       padding: 4rem 1.5rem;
       text-align: center;
@@ -39,10 +39,22 @@
       opacity: 0.85;
     }
 
+    .page {
+        display: flex;
+        align-items: flex-start;
+        gap: 3rem;
+
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+    }
+
+
+
     main {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 3rem 1.5rem;
+        flex: 1;
+        max-width: 900px;
+        min-width: 0;
     }
 
     section {
@@ -94,6 +106,83 @@
         font-size: 0.9rem;
         color: rgb(102, 102, 102);
     }
+
+    ul {
+        padding-left: 1.2rem;
+    }
+
+    li {
+        margin-bottom: 0.6rem;
+    }
+
+    a {
+        color: rgb(16, 115, 160);
+        text-decoration: none;
+    }
+
+    a:hover {
+        text-decoration: underline;
+    }
+
+    .toc {
+        position: sticky;
+        top: 2rem;               
+        align-self: flex-start;
+
+        width: 200px;
+        font-size: 0.9rem;
+
+        background-color: rgba(241, 246, 247, 0.95);
+        padding: 1rem;
+
+        border-left: 3px solid rgb(73, 135, 194);
+    }
+
+
+
+    .toc strong {
+        display: block;
+        margin-bottom: 0.6rem;
+    }
+
+    .toc a {
+        display: block;
+        margin-bottom: 0.4rem;
+        color: #2c2c2c;
+        text-decoration: none;
+    }
+
+    .toc a:hover {
+        color: rgb(16, 115, 160);
+    }
+
+    .toc hr {
+      border: none;
+      border-top: 2px solid #e0e0e0; /* gleich wie section headers */
+      margin: 1.5rem -1rem;        /* mehr Abstand + etwas breiter */
+    }
+
+    .toc-link {
+      color: rgb(16, 115, 160);
+      font-size: 1rem;        /* größer als TOC */
+      font-weight: 500;
+      margin-bottom: 0.6rem;
+    }
+
+    .toc-link:hover {
+      text-decoration: underline;
+    }
+
+
+
+    /* Hide TOC on small screens */
+    @media (max-width: 1100px) {
+    .toc {
+        display: none;
+    }
+    }
+
+
   </style>
 </head>
 
@@ -104,13 +193,15 @@
   <h2>An Interactive Dash Application</h2>
   <p>
     Clara Pichler and Paul Schmitt<br>
-    A Project for the Course 193.166 Visualization at the Technical University Vienna.
+    Final Project for the Course 193.166 Visualization at the Technical University of Vienna
   </p>
 </header>
 
+<div class="page">
+  
 <main>
 
-<section>
+<section id="overview">
   <h3>Project Overview</h3>
 
   <p>
@@ -139,23 +230,18 @@
   </p>
 </section>
 
-<section>
+<section id="contribution">
   <h3>Our Contribution</h3>
 
   <p>
-    In this project, we reimplemented the Edge-Path Bundling (EPB) algorithm in Python. This helped us 
-    fully understanding the algorithm. We also used the same (similar) two-dimensional datasets as the 
-    original paper to validate our implementation.
-  </p>
-
-  <p>
+    In this project, we reimplemented the Edge-Path Bundling (EPB) algorithm in Python. We also used the same 
+    (similar) two-dimensional datasets as the original paper to validate our implementation.
     We then extended EPB to work with higher-dimensional data. 
     In particular, we introduce a three-dimensional brain connectivity dataset derived from
-    human connectomes. Working in 3D posed new challenges and provided insight into how the
-    algorithm behaves beyond planar layouts. The original algorithm did not introduces big problems since the 
+    human connectomes. The original algorithm did not introduces big problems since the 
     it does not refer to coordinates but only to graph nodes. Therefore, we had one 
-    algorithm for two and three dimensional datasets. However, different kind of visual clutter was created.
-    ###TODO
+    algorithm for two and three dimensional datasets. However, different kind of visual clutter was created. 
+    Visualising all three datasets had some challenges.
   </p>
 
   <p>
@@ -174,7 +260,7 @@
   </p>
 </section>
 
-<section>
+<section id="datasets">
   <h3>Datasets</h3>
 
   <h4>Air Traffic</h4>
@@ -186,7 +272,7 @@
 
   <h4>Migration Flows</h4>
   <p>
-    The Migration dataset represents migration flows between U.S. counties.
+    The Migration dataset represents migration outflows between U.S. counties.
     While the exact version used in the original paper is no longer available,
     a comparable dataset from the U.S. Census Bureau is used instead.
     Distances are again computed using the haversine formula.
@@ -201,7 +287,7 @@
   </p>
 </section>
 
-<section>
+<section id="run">
   <h3>How to Run</h3>
 
   <p>
@@ -212,47 +298,56 @@
   <pre><code>pip install -r requirements.txt</code></pre>
 
   <p>
-    To start the Dash application, run either:
+    To start the Dash application, run either
   </p>
-
-  <pre><code>python src/dashboard/app.py
-    # OR
-    python run_dashboard.py</code></pre>
+  <pre><code>python src/dashboard/app.py</code></pre>
+  <p>
+    or
+  </p>
+  <pre><code>python run_dashboard.py</code></pre>
 
   <p>
-    Then open <code>http://127.0.0.1:8050/</code> in your browser.
+    Then open <code>http://0.0.0.0:8050/</code> in your browser.
   </p>
 </section>
 
-<section>
+<section id="user-manual">
   <h3>User Manual</h3>
 
   <p>
-    The screenshot below shows our Dash application. On the left side one can find the 
-    <em>Parameter Control</em>. The user can choose one of the three network datasets which 
-    where described in cite-section-datasets.
-  </p>
+  The screenshot below shows our Dash application. On the left side one can find the 
+  parameter control. It is divided into three sections.
+</p>
+
 
   <div class="figure">
     <img src="images/first_screenshot.png" alt="Dashboard Start Page">
     </div>
 
   <p>
-    The maximun distortion parameter <em>k</em> can be changed to a float (NOT only integer) between and including 1 and 5. Note that in the 
+    The user can choose one of the three network datasets, as described in <a href="#datasets">Section&nbsp;Datasets</a>.
+    The maximun distortion parameter <em>k</em> can be changed to a real number between and including 1 and 3. In the 
     original paper Wallinger et. al. writes that a maximum distortion factor between 1.5 and 3 works well for most of their experiments whereas
-    a distortion factor of less than 1.5 resulted in very little edge bundling. This can be explored by the user with our application and with different datasets.
-    Also an edge weight factor <em>d</em> can be changed to the users liking, ranging again from 1 till 5. Values of 1, 2 and 3 work well 
-    but higher values penalise long edges from being included in shortest paths used for bundling.
+    a distortion factor of less than 1.5 resulted in very little edge bundling. That is why we settled on this range.
+    Also an edge weight factor <em>d</em> can be changed to the users liking, ranging again from 1 till 3. We only chose those values since 
+    higher values penalise long edges from being included in shortest paths used for bundling. Note that <em>d</em> is an integer.
   </p>
 
   <p>
     Once the control points (edges that are not bundeled) are computed they are used to draw the network graph (seen on the right) each edge using 
-    a smooth Bezier curve. A smoothing parameter which controls the bundling strength in the final drawing can also be controlled by the user. 
+    a smooth Bezier curve. A smoothing parameter which controls the bundling strength in the final drawing can also be controlled by the user. This integer 
+    is 2 for the experiments of the original paper, but in our application the user can play around with the parameter. Also the user can choose to 
+    highlight the bundled edges and even make them thicker for a more defined visualization of the algorithm.
+  </p>
+
+  <p>
+    At the top of the page one can see the header as well as some statistics that tell you how many edges the network has in total, how many 
+    has been bundled through the EPB algorithm and the ratio. 
   </p>
 
 </section>
 
-<section>
+<section id="discussion">
   <h3>Discussion & Future Work</h3>
 
   <p>
@@ -262,23 +357,89 @@
   </p>
 
   <p>
-    Future work could focus on performance optimizations, GPU-based rendering,
-    or benchmarking EPB against other edge bundling techniques to better understand
-    its strengths and limitations.
-  </p>
-
-  <p>
     In the worst case, EPB has a time complexity of
     <code>O(|E|² log |V|)</code>, as Dijkstra’s algorithm may be executed for each edge.
     In practice, the distortion threshold <code>k</code> significantly reduces runtime
-    by terminating path searches early.
+    by terminating path searches early. We did improve performance by introducing caching system for 
+    datasets and bundling results as well as limiting the nodes of each of the datasets. However, we belive 
+    performance can still be greatly improved. 
   </p>
+
+  <p>
+    Future work could focus on performance optimizations, through GPU-based rendering
+    or pre computing some commonly used statistics. For example pre-computing common 
+    Bèzier curve configurations to minimize real-time computational overhead.
+  </p>
+
+  <p>Another interesting addition to this project is benchmarking EPB against other edge bundling techniques to better understand
+    its strengths and limitations. Although EPB introduces way less ambiguities than other bundeling algorithms, they are still 
+    struggeling with some. In their paper they are discussing <strong>Path Endpoint Ambiguit</strong> and <strong>Edge Crossing Ambiguity</strong> 
+    which are still an open problem and would be interesting to explore.</p>
+
+
+
 </section>
+
+<section id="references">
+  <h3>References</h3>
+
+  <ul>
+    <li>
+      Wallinger, M., Mühler, T., & Gröller, E. (2021). 
+      <em>Edge-Path Bundling: A Less Ambiguous Edge Bundling Approach</em>.
+      <a href="https://arxiv.org/abs/2108.05467" target="_blank">arXiv:2108.05467</a>
+    </li>
+
+    <li>
+      OpenFlights Project.
+      <a href="https://openflights.org/data.php" target="_blank">
+        https://openflights.org/data.php
+      </a>
+    </li>
+
+    <li>
+      BrainGraph – PIT Group Connectomes.
+      <a href="https://braingraph.org/download-pit-group-connectomes/" target="_blank">
+        https://braingraph.org/download-pit-group-connectomes/
+      </a>
+    </li>
+
+    <li>
+      U.S. Census Bureau. County-to-County Migration Flows.
+      <a href="https://www.census.gov/data/tables/2000/demo/geographic-mobility/county-to-county-migration-flows.html" target="_blank">
+        Census Migration Data
+      </a>
+    </li>
+  </ul>
+</section>
+
 
 </main>
 
+  <nav class="toc">
+    <strong>Contents</strong>
+    <a href="#overview">Project Overview</a>
+    <a href="#contribution">Our Contribution</a>
+    <a href="#datasets">Datasets</a>
+    <a href="#run">How to Run</a>
+    <a href="#user-manual">User Manual</a>
+    <a href="#discussion">Discussion & Future Work</a>
+    <a href="#references">References</a>
+
+    <hr>
+
+    <a class="toc-link" href="demo.html">Demo</a>
+    <a class="toc-link" href="code_documentation.html">Code Documentation</a>
+    <a class="toc-link" href="https://github.com/claraelisabeth/Visualization-193.166" target="_blank">
+        Source Code
+    </a>
+  </nav>
+
+</div>
+
+
 <footer>
-  2026 Edge-Path Bundling TU Vienna
+  2026 - Edge-Path Bundling - TU Vienna
 </footer>
 
 </body>
