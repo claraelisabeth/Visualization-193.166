@@ -498,10 +498,11 @@ curve_points = create_smooth_bundled_path(
     </ul>
   </div>
 
-  <h5>create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str) → nx.DiGraph</h5>
+  <h5>create_graph(nodes: List[Dict], edges: List[Tuple], distance_type: str = 'euclidean') → nx.DiGraph</h5>
   <div class="code-example">
     <p><strong>Graph construction utility</strong> that builds NetworkX graphs from raw coordinate data.</p>
     <ul>
+      <li><strong>Returns:</strong> <code>nx.DiGraph</code> - A NetworkX directed graph with node positions (x, y, z) and initialized edge attributes (length, locked, skip)</li>
       <li>Supports both 2D and 3D coordinate systems</li>
       <li>Automatically calculates spatial edge weights using specified distance metric</li>
       <li>Handles missing or invalid coordinate data gracefully</li>
@@ -553,7 +554,8 @@ curve_points = create_smooth_bundled_path(
         <tr>
           <th>Parameter</th>
           <th>Type</th>
-          <th>Range</th>
+          <th>Algorithm Range</th>
+          <th>Dashboard Range</th>
           <th>Description</th>
           <th>Impact</th>
         </tr>
@@ -563,6 +565,7 @@ curve_points = create_smooth_bundled_path(
           <td><strong>k</strong></td>
           <td>float</td>
           <td>1.0 - 10.0</td>
+          <td>1.0 - 3.0</td>
           <td>Distortion threshold (path length / direct distance)</td>
           <td>Higher values allow more bundling but increase distortion</td>
         </tr>
@@ -570,11 +573,18 @@ curve_points = create_smooth_bundled_path(
           <td><strong>d</strong></td>
           <td>float</td>
           <td>0.5 - 3.0</td>
+          <td>1 - 3</td>
           <td>Edge weight exponent (weight = length^d)</td>
           <td>Higher values prioritize longer edges for bundling</td>
         </tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="note">
+    <strong>Dashboard vs. Algorithm Ranges:</strong> The interactive dashboard uses narrower parameter ranges than the algorithm technically supports.
+    This is intentional—values outside the dashboard ranges rarely produce meaningful visual improvements while significantly increasing computation time.
+    When using the API directly, you may experiment with the full algorithm ranges.
   </div>
 
   <div class="complexity-note">
@@ -692,6 +702,18 @@ curve_points = create_smooth_bundled_path(
     <li><strong>Responsive Design</strong> - Academic-styled interface with sidebar controls and main visualization area</li>
     <li><strong>Smart Control Disabling</strong> - Visualization controls are grayed out when k=1 (no bundling)</li>
   </ul>
+
+  <h4>Caching System</h4>
+  <p>
+    The dashboard implements a two-level caching system to avoid redundant computations and provide responsive interactions:
+  </p>
+  <ul>
+    <li><strong><code>_dataset_cache</code></strong> - Stores loaded and preprocessed datasets keyed by dataset name. Once a dataset (brain, air traffic, or migration) is loaded, subsequent switches back to that dataset are instantaneous. The cache persists for the lifetime of the application session.</li>
+    <li><strong><code>_bundling_cache</code></strong> - Stores bundling algorithm results keyed by the tuple <code>(dataset_name, k, d)</code>. When users adjust visualization-only parameters (smoothing, colors, thickness), the bundling computation is skipped entirely and cached results are reused. Only changes to k or d parameters trigger a new bundling computation.</li>
+  </ul>
+  <div class="note">
+    <strong>Cache Behavior:</strong> Visualization-only changes (smoothing level, edge color mode, edge thickness) use cached bundling results for fast updates. Algorithm parameter changes (k, d) or dataset changes invalidate the relevant cache entries and trigger recomputation.
+  </div>
 
   <h4>Callback Architecture</h4>
   <p>
